@@ -1,17 +1,14 @@
 macro_rules! nom {
     ($stream:ident -> { $($patt:expr => $action:expr),+ }) => (
-        {
-            $(if let Some((0, len)) = regex!($patt).find($stream) {
-                let val = $stream.slice_to(len);
-                $stream = $stream.slice_from(len);
-                Some($action(val))
-            })else+ else {
-                None
-            }
+        $(if let Some((0, len)) = regex!($patt).find($stream) {
+            let val = $stream.slice_to(len);
+            $stream = $stream.slice_from(len);
+            Some($action(val))
+        })else+ else {
+            None
         }
     )
 }
-
 
 #[deriving(Show)]
 pub enum Token {
