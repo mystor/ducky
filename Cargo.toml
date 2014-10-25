@@ -1,0 +1,13 @@
+[package]
+
+name = "lang"
+version = "0.0.1"
+authors = [ "Michael Layzell <michael@thelayzells.com>" ]
+
+[dependencies.peg]
+
+git = "https://github.com/kevinmehall/rust-peg.git"
+
+[[bin]]
+
+name = "lang"
