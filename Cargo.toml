@@ -4,9 +4,9 @@ name = "lang"
 version = "0.0.1"
 authors = [ "Michael Layzell <michael@thelayzells.com>" ]
 
-[dependencies.peg]
+[dependencies.lambdas]
 
-git = "https://github.com/kevinmehall/rust-peg.git"
+git = "https://github.com/mystor/lambda-macro.git"
 
 [[bin]]
 

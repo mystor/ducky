@@ -2,11 +2,11 @@
 name = "lang"
 version = "0.0.1"
 dependencies = [
- "peg 0.1.0 (git+https://github.com/kevinmehall/rust-peg.git#04c307ac857bb0c5e1b4a990a7be6b523db0d830)",
+ "lambdas 0.0.1 (git+https://github.com/mystor/lambda-macro.git#5342f926700cffe74a1d3a2f83dc11f2b5d06d71)",
 ]
 
 [[package]]
-name = "peg"
-version = "0.1.0"
-source = "git+https://github.com/kevinmehall/rust-peg.git#04c307ac857bb0c5e1b4a990a7be6b523db0d830"
+name = "lambdas"
+version = "0.0.1"
+source = "git+https://github.com/mystor/lambda-macro.git#5342f926700cffe74a1d3a2f83dc11f2b5d06d71"
 

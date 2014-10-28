@@ -5,11 +5,17 @@
 extern crate regex_macros;
 extern crate regex;
 
+// My fancy lambda thingies!
+#[phase(plugin)]
+extern crate lambdas;
+
 pub mod ast;
 pub mod lexer;
 pub mod parser;
+pub mod parserc;
 
 fn main() {
+    println!("{}", parserc::ab(&parserc::State("ac", parserc::Pos{line:1, col:0})));
     // Lex some input and show the tokens
     println!("{}", lexer::lex(r#"
 type Obj = {};
@@ -26,4 +32,7 @@ let z = {x: 10, y: 20};
 
 print(magnitude(z));
 "#));
+    if let Ok(otoks) = lexer::lex(r#"13"#) {
+        println!("{}", parser::literal(otoks.as_slice()));
+    }
 }

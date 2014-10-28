@@ -28,4 +28,5 @@ pub enum Stmt {
 pub enum Expr {
     IntExpr(int),
     StrExpr(String),
+    FloatExpr(f64),
 }
