@@ -52,7 +52,56 @@ pub trait ParserAction<'a, A> {
     fn run(&self, st: &State<'a>) -> Result<(A, State<'a>), String>;
 }
 
-pub type Parser<'a, A> = Box<ParserAction<'a, A> + 'static>;
+pub type Parser<'a, 'b, A> = Box<ParserAction<'a, A> + 'b>;
+
+fn then<'cl1: 'cl, 'cl2: 'cl, 'cl, A: 'cl, B: 'cl>(p1: Parser<'cl, 'cl1, A>, p2: Parser<'cl, 'cl2, B>) -> Parser<'cl, 'cl, B> {
+    struct Closure<'cl, 'cl1: 'cl, 'cl2: 'cl, A, B>(Parser<'cl, 'cl1, A>, Parser<'cl, 'cl2, B>);
+    
+    impl <'cl, 'cl1: 'cl, 'cl2: 'cl, A, B>ParserAction<'cl, B> for Closure<'cl, 'cl1, 'cl2, A, B> {
+        fn run(&self, st: &State<'cl>) -> Result<(B, State<'cl>), String> {
+            let &Closure(ref a1, ref a2) = self;
+            let (_, st) = try!(a1.run(st));
+            a2.run(&st)
+        }
+    }
+
+    box Closure(p1, p2)
+}
+
+
+
+
+// fn then<'a: 'b, 'b, A: 'b, B: 'b>(p1: Parser<'a, 'b, A>, p2: Parser<'a, 'b, B>) -> Parser<'a, 'b, B> {
+//     struct Closure<'a, 'b, A, B>(Parser<'a, 'b, A>, Parser<'a, 'b, B>);
+// 
+//     impl <'a, 'b, A, B>ParserAction<'a, B> for Closure<'a, 'b, A, B> {
+//         fn run(&self, st: &State<'a>) -> Result<(B, State<'a>), String> {
+//             let &Closure(ref a1, ref a2) = self;
+//             let (_, st) = try!(a1.run(st));
+//             a2.run(&st)
+//         }
+//     }
+//     
+//     box Closure(p1, p2)
+// }
+// 
+// pub trait Thenable<'a, 'b> {
+//     fn then<A>(self, other: Parser<'a, 'b, A>) -> Parser<'a, 'b, A>;
+// }
+
+// impl <'a, 'b, A>Thenable<'a, 'b> for Parser<'a, 'b, A> {
+//     fn then<B>(self, other: Parser<'a, 'b, B>) -> Parser<'a, 'b, B> {
+//         struct Closure<'a, 'b, A, B>(Parser<'a, 'b, A>, Parser<'a, 'b, B>);
+//         impl <'a, 'b, A, B>ParserAction<'a, B> for Closure<'a, 'b, A, B> {
+//             fn run(&self, st: &State<'a>) -> Result<(B, State<'a>), String> {
+//                 let &Closure(ref a1, ref a2) = self;
+//                 let (_, st) = try!(a1.run(st));
+//                 a2.run(&st)
+//             }
+//         }
+//         box Closure(self, other)
+//     }
+// }
 
 macro_rules! parser {
     (
@@ -86,7 +135,7 @@ macro_rules! parser {
     )
 }
 
-pub fn white<'a>() -> Parser<'a, ()> {
+pub fn white<'a>() -> Parser<'a, 'static, ()> {
     parser!([] (st) -> () {
         let &State(s, l) = st;
         let ns = s.trim_left_chars(|c: char| c.is_whitespace());
@@ -94,7 +143,7 @@ pub fn white<'a>() -> Parser<'a, ()> {
     })
 }
 
-pub fn charp<'a>(pred: fn (&char) -> bool) -> Parser<'a, char> {
+pub fn charp<'a>(pred: fn (&char) -> bool) -> Parser<'a, 'static, char> {
     parser!([pred: fn (&char) -> bool] (st) -> char {
         let &State(s, l) = st;
         if s.len() == 0 { return Err("Unexpected End of Input".to_string()) }
@@ -108,7 +157,7 @@ pub fn charp<'a>(pred: fn (&char) -> bool) -> Parser<'a, char> {
     })
 }
 
-pub fn some_char<'a>(patt: char) -> Parser<'a, char> {
+pub fn some_char<'a>(patt: char) -> Parser<'a, 'static, char> {
     parser!([patt: char] (st) -> char {
         let &State(s, l) = st;
         if s.len() == 0 { return Err("Unexpected End of Input".to_string()) }
@@ -122,9 +171,9 @@ pub fn some_char<'a>(patt: char) -> Parser<'a, char> {
     })
 }
 
-pub fn string<'a, 'b>(patt: MaybeOwned<'b>) -> Box<ParserAction<'a, &'a str> + 'b> {
-    struct Closure<'b>(MaybeOwned<'b>);
-    impl <'a, 'b>ParserAction<'a, &'a str> for Closure<'b> {
+pub fn string<'a, 'patt>(patt: MaybeOwned<'patt>) -> Parser<'a, 'patt, &'a str> {
+    struct Closure<'patt>(MaybeOwned<'patt>);
+    impl <'a, 'patt>ParserAction<'a, &'a str> for Closure<'patt> {
         fn run(&self, st: &State<'a>) -> Result<(&'a str, State<'a>), String> {
             let &Closure(ref patt,) = self;
             let &State(s, l) = st;
@@ -142,89 +191,29 @@ pub fn string<'a, 'b>(patt: MaybeOwned<'b>) -> Box<ParserAction<'a, &'a str> + '
     box Closure(patt)
 }
 
-// pub fn string<'a, 'b>(patt: &'b str) -> Box<ParserAction<'a, &'a str> + 'b> {
-//     struct Closure<'b>(&'b str);
-//     impl <'a, 'b>ParserAction<'a, &'a str> for Closure<'b> {
-//         fn run(&self, st: &State<'a>) -> Result<(&'a str, State<'a>), String> {
-//             let &Closure(patt,) = self;
-//             let &State(s, l) = st;
-//             let len = s.len();
-//             if len < patt.len() { return Err("Unexpected End of Input".to_string()) }
+pub fn regex<'a>(patt: Regex) -> Parser<'a, 'static, &'a str> {
+    struct Closure(Regex);
+    impl <'a>ParserAction<'a, &'a str> for Closure {
+        fn run(&self, st: &State<'a>) -> Result<(&'a str, State<'a>), String> {
+            let &Closure(ref patt,) = self;
+            let &State(s, l) = st;
             
-//             let ss = s.slice_to(len);
-//             if ss == patt {
-//                 Ok((ss, State(s.slice_from(len), l.advance(ss))))
-//             } else {
-//                 Err("Unexpected Text".to_string())
-//             }
-//         }
-//     }
-//     box Closure(patt)
-// }
+            if let Some((0, len)) = patt.find(s) {
+                let ns = s.slice_to(len);
+                Ok((ns, State(s.slice_from(len), l.advance(ns))))
+            } else {
+                Err("Unexpected".to_string())
+            }
+        }
+    }
+    box Closure(patt)
+}
 
-// pub fn white<'a>() -> Parser<'a, ()> {
-//     lambda!([] (st: &State<'a>) -> ParserResult<'a, ()> {
-//         let &State(s, l) = st;
-//         let ns = s.trim_left_chars(|c: char| c.is_whitespace());
-//         Ok(((), State(ns, l.advance(s.slice_to(s.len() - ns.len())))))
-//     })
-// }
-
-
-// pub fn whitespace<'a>(st: &State<'a>) -> Parsed<'a, ()> {
-//     let &State(s, l) = st;
-//     let ns = s.trim_left_chars(|c: char| c.is_whitespace());
-//     Ok(((), State(ns, l.advance(s.slice_to(s.len() - ns.len())))))
-// }
-// 
-// pub fn charp<'a>(pred: fn (&char) -> bool, st: &State<'a>) -> Parsed<'a, char> {
-//     let &State(s, l) = st;
-//     if s.len() == 0 { return Err("Unexpected End of Input".to_string()); }
-// 
-//     let c = s.char_at(0);
-//     if pred(&c) {
-//         Ok((c, State(s.slice_from(1), l.next(&c))))
-//     } else {
-//         Err(format!("Unexpected {}", c))
-//     }
-// }
-// 
-// pub fn string<'a>(patt: &str, st: &State<'a>) -> Parsed<'a, &'a str> {
-//     let &State(s, l) = st;
-//     let len = patt.len();
-//     if s.len() < len { return Err(format!("Expected '{}', found '{}'", patt, s)); }
-//     
-//     let os = s.slice_to(len);
-//     if os == patt {
-//         Ok((os, State(s.slice_from(len), l.advance(os))))
-//     } else {
-//         Err(format!("Expected '{}', found '{}'", patt, os))
-//     }
-// }
-// 
-// pub fn wstring<'a>(patt: &str, st: &State<'a>) -> Parsed<'a, &'a str> {
-//     let (_, st) = try!(whitespace(st));
-//     string(patt, &st)
-// }
-// 
-// pub fn regs<'a>(patt: Regex, st: &State<'a>) -> Parsed<'a, &'a str> {
-//     let &State(s, l) = st;
-//     if let Some((0, len)) = patt.find(s) {
-//         let v = s.slice_to(len);
-//         let ns = s.slice_from(len);
-//         Ok((v, State(ns, l.advance(v))))
-//     } else {
-//         Err(format!("Unexpected"))
-//     }
-// }
-// 
-// pub fn wregs<'a>(patt: Regex, st: &State<'a>) -> Parsed<'a, &'a str> {
-//     let (_, st) = try!(whitespace(st));
-//     wregs(patt, &st)
-// }
-// 
-// pub fn parseint<'a>(st: &State<'a>) -> Parsed<'a, &'a str> {
-//     wregs(regex!(r"^[0-9]+"), st)
+pub fn sosososos<'a>(patt: MaybeOwned<'static>) -> Parser<'a, 'static, &'a str> {
+    then(white(), string(patt))
+}
+// pub fn wstring<'a, 'patt>(patt: MaybeOwned<'patt>) -> Parser<'a, 'patt, &'a str> {
+//     then(white(), string(patt))
 // }
 
 pub fn literal<'a>(toks: &'a [Token]) -> Result<(Expr, &'a [Token]), String> {
