@@ -71,7 +71,7 @@ pub fn tokenp<'a>(pred: |&Token| -> bool, st: State<'a>) -> Parsed<'a, &'a Token
 
 pub fn parse_ident<'a>(st: State<'a>) -> Parsed<'a, Ident> {
     match token!(IDENT(_), st) {
-        Ok((&IDENT(ref name), st)) => Ok((Ident::new(name.clone()), st)),
+        Ok((&IDENT(ref name), st)) => Ok((Ident(name.clone()), st)),
         Err(s) => Err(format!("{} Expected IDENT", s)),
         _ => unreachable!()
     }

@@ -1,13 +1,10 @@
-#[deriving(Show)]
-pub struct Ident(String);
-impl Ident {
-    pub fn new(s: String) -> Ident {
-        Ident(s)
-    }
-}
+use string_cache::Atom;
 
 #[deriving(Show)]
-pub struct Attr(Ident, Type);
+pub struct Ident(pub Atom);
+
+#[deriving(Show)]
+pub struct Attr(pub Ident, pub Type);
 
 #[deriving(Show)]
 pub enum Type {

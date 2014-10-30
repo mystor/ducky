@@ -1,3 +1,5 @@
+use string_cache::Atom;
+
 macro_rules! nom {
     ($stream:ident -> { $($patt:expr => $action:expr),+ }) => (
         $(if let Some((0, len)) = regex!($patt).find($stream) {
@@ -54,7 +56,7 @@ pub enum Token {
     LIT_STR(String),
 
     // Identifier
-    IDENT(String),
+    IDENT(Atom),
 }
 
 pub fn lex(program: &str) -> Result<Vec<Token>, String> {
@@ -108,7 +110,7 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
             r"^=>" => |_| { FAT_ARROW },
 
             // The interesting ones
-            r"^[a-zA-Z_][a-zA-Z0-9_]*" => |v:&str| { IDENT(v.to_string()) },
+            r"^[a-zA-Z_][a-zA-Z0-9_]*" => |v:&str| { IDENT(Atom::from_slice(v)) },
             r#"^"([^"]|\\")""# => |v:&str| { LIT_STR(v.to_string()) }, // TODO: Better string parsing
             r"^[0-9]*\.[0-9]+" => |v:&str| { LIT_FLOAT(from_str(v).unwrap()) },
             r"^[0-9]+" => |v:&str| { LIT_INTEGER(from_str(v).unwrap()) }
