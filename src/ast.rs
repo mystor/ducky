@@ -1,8 +1,13 @@
 #[deriving(Show)]
-pub struct Name(String);
+pub struct Ident(String);
+impl Ident {
+    pub fn new(s: String) -> Ident {
+        Ident(s)
+    }
+}
 
 #[deriving(Show)]
-pub struct Attr(Name, Type);
+pub struct Attr(Ident, Type);
 
 #[deriving(Show)]
 pub enum Type {
@@ -14,13 +19,13 @@ pub enum Type {
 
 #[deriving(Show)]
 pub enum Item {
-    TypeItem(Name, Type),
+    TypeItem(Ident, Type),
     StmtItem(Stmt),
 }
 
 #[deriving(Show)]
 pub enum Stmt {
-    DeclStmt(Name, Expr),
+    DeclStmt(Ident, Expr),
     ExprStmt(Expr),
 }
 
@@ -29,4 +34,5 @@ pub enum Expr {
     IntExpr(int),
     StrExpr(String),
     FloatExpr(f64),
+    FnExpr(Vec<Ident>, Box<Expr>),
 }

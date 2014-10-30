@@ -5,9 +5,7 @@
 extern crate regex_macros;
 extern crate regex;
 
-// My fancy lambda thingies!
-#[phase(plugin)]
-extern crate lambdas;
+extern crate string_cache;
 
 pub mod ast;
 pub mod lexer;

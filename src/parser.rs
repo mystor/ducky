@@ -1,9 +1,7 @@
 use std::fmt;
 
-use std::str::MaybeOwned;
-use regex::Regex;
-use lexer::{Token, LIT_INTEGER, LIT_FLOAT};
-use ast::{Expr, IntExpr, FloatExpr};
+use lexer::{Token, IDENT, LIT_INTEGER, LIT_FLOAT, LPAREN, RPAREN, COMMA};
+use ast::{Expr, FnExpr, IntExpr, FloatExpr, Ident};
 
 #[deriving(PartialEq, Eq, Clone)]
 pub struct Loc {
@@ -44,178 +42,72 @@ impl fmt::Show for Loc {
     }
 }
 
-
-#[deriving(Show, PartialEq, Eq, Clone)]
-pub struct State<'a>(&'a str, Loc);
-
-pub trait ParserAction<'a, A> {
-    fn run(&self, st: &State<'a>) -> Result<(A, State<'a>), String>;
+macro_rules! token {
+    ($tok:pat, $st:expr) => {
+        tokenp(|t: &Token| {
+            match *t {
+                $tok => true,
+                _ => false,
+            }
+        }, $st)
+    }
 }
 
-pub type Parser<'a, 'b, A> = Box<ParserAction<'a, A> + 'b>;
+pub type State<'a> = &'a [Token];
+pub type Parsed<'a, A> = Result<(A, State<'a>), String>;
 
-fn then<'cl1: 'cl, 'cl2: 'cl, 'cl, A: 'cl, B: 'cl>(p1: Parser<'cl, 'cl1, A>, p2: Parser<'cl, 'cl2, B>) -> Parser<'cl, 'cl, B> {
-    struct Closure<'cl, 'cl1: 'cl, 'cl2: 'cl, A, B>(Parser<'cl, 'cl1, A>, Parser<'cl, 'cl2, B>);
+pub fn tokenp<'a>(pred: |&Token| -> bool, st: State<'a>) -> Parsed<'a, &'a Token> {
+    match st.head() {
+        Some(tok) => {
+            if pred(tok) {
+                Ok((tok, st.tail()))
+            } else {
+                Err(format!("Unexpected {}", tok))
+            }
+        }
+        None => Err("Unexpected End of File".to_string())
+    }
+}
+
+pub fn parse_ident<'a>(st: State<'a>) -> Parsed<'a, Ident> {
+    match token!(IDENT(_), st) {
+        Ok((&IDENT(ref name), st)) => Ok((Ident::new(name.clone()), st)),
+        Err(s) => Err(format!("{} Expected IDENT", s)),
+        _ => unreachable!()
+    }
+}
+
+pub fn parse_expr<'a>(st: State<'a>) -> Parsed<'a, Expr> {
+    Err("".to_string())
+}
+
+pub fn parse_args<'a>(st: State<'a>) -> Parsed<'a, Vec<Ident>> {
+    let mut args: Vec<Ident> = vec![];
+    let mut currst = st;
+    loop {
+        if let Ok((arg, st)) = parse_ident(currst) {
+            args.push(arg);
+            
+            match tokenp(|c: &Token| { match *c { COMMA => true, _ => false } }, st) {
+                Ok((_, st)) => { currst = st },
+                Err(_) => { return Ok((args, st)); }
+            }
+        } else {
+            return Ok((args, currst));
+        }
+    }
+}
+
+pub fn parse_fn<'a>(st: State<'a>) -> Parsed<'a, Expr> {
+    // fn (ARGS) EXPR
+    // let (_, st) = try_token!(IDENT(String("fn")), st);
+    let (_, st) = try!(token!(LPAREN, st));
+    let (args, st) = try!(parse_args(st));
+    let (_, st) = try!(token!(RPAREN, st));
+    let (body, st) = try!(parse_expr(st));
+    Ok((FnExpr(args, box body), st))
+}
     
-    impl <'cl, 'cl1: 'cl, 'cl2: 'cl, A, B>ParserAction<'cl, B> for Closure<'cl, 'cl1, 'cl2, A, B> {
-        fn run(&self, st: &State<'cl>) -> Result<(B, State<'cl>), String> {
-            let &Closure(ref a1, ref a2) = self;
-            let (_, st) = try!(a1.run(st));
-            a2.run(&st)
-        }
-    }
-
-    box Closure(p1, p2)
-}
-
-
-
-
-// fn then<'a: 'b, 'b, A: 'b, B: 'b>(p1: Parser<'a, 'b, A>, p2: Parser<'a, 'b, B>) -> Parser<'a, 'b, B> {
-//     struct Closure<'a, 'b, A, B>(Parser<'a, 'b, A>, Parser<'a, 'b, B>);
-// 
-//     impl <'a, 'b, A, B>ParserAction<'a, B> for Closure<'a, 'b, A, B> {
-//         fn run(&self, st: &State<'a>) -> Result<(B, State<'a>), String> {
-//             let &Closure(ref a1, ref a2) = self;
-//             let (_, st) = try!(a1.run(st));
-//             a2.run(&st)
-//         }
-//     }
-//     
-//     box Closure(p1, p2)
-// }
-// 
-// pub trait Thenable<'a, 'b> {
-//     fn then<A>(self, other: Parser<'a, 'b, A>) -> Parser<'a, 'b, A>;
-// }
-
-// impl <'a, 'b, A>Thenable<'a, 'b> for Parser<'a, 'b, A> {
-//     fn then<B>(self, other: Parser<'a, 'b, B>) -> Parser<'a, 'b, B> {
-//         struct Closure<'a, 'b, A, B>(Parser<'a, 'b, A>, Parser<'a, 'b, B>);
-//         impl <'a, 'b, A, B>ParserAction<'a, B> for Closure<'a, 'b, A, B> {
-//             fn run(&self, st: &State<'a>) -> Result<(B, State<'a>), String> {
-//                 let &Closure(ref a1, ref a2) = self;
-//                 let (_, st) = try!(a1.run(st));
-//                 a2.run(&st)
-//             }
-//         }
-//         box Closure(self, other)
-//     }
-// }
-
-macro_rules! parser {
-    (
-        [$($capt:ident : $cty:ty),+] ($st:ident) -> $ty:ty $body:expr
-    ) => (
-        {
-            #[allow(dead_code)]
-            struct Closure($($cty),*);
-            impl <'a>ParserAction<'a, $ty> for Closure {
-                fn run(&self, $st: &State<'a>) -> Result<($ty, State<'a>), String> {
-                    let &Closure($($capt),*) = self; // Expand lambda captures
-                    $body
-                }
-            }
-            box Closure($($capt),*)
-        }
-    );
-    (
-        [] ($st:ident) -> $ty:ty $body:expr
-    ) => (
-        {
-            #[allow(dead_code)]
-            struct Closure;
-            impl <'a>ParserAction<'a, $ty> for Closure {
-                fn run(&self, $st: &State<'a>) -> Result<($ty, State<'a>), String> {
-                    $body
-                }
-            }
-            box Closure
-        }
-    )
-}
-
-pub fn white<'a>() -> Parser<'a, 'static, ()> {
-    parser!([] (st) -> () {
-        let &State(s, l) = st;
-        let ns = s.trim_left_chars(|c: char| c.is_whitespace());
-        Ok(((), State(ns, l.advance(s.slice_to(s.len() - ns.len())))))
-    })
-}
-
-pub fn charp<'a>(pred: fn (&char) -> bool) -> Parser<'a, 'static, char> {
-    parser!([pred: fn (&char) -> bool] (st) -> char {
-        let &State(s, l) = st;
-        if s.len() == 0 { return Err("Unexpected End of Input".to_string()) }
-
-        let c = s.char_at(0);
-        if pred(&c) {
-            Ok((c, State(s.slice_from(1), l.next(&c))))
-        } else {
-            Err(format!("Unexpected {}", c))
-        }
-    })
-}
-
-pub fn some_char<'a>(patt: char) -> Parser<'a, 'static, char> {
-    parser!([patt: char] (st) -> char {
-        let &State(s, l) = st;
-        if s.len() == 0 { return Err("Unexpected End of Input".to_string()) }
-
-        let c = s.char_at(0);
-        if c == patt {
-            Ok((c, State(s.slice_from(1), l.next(&c))))
-        } else {
-            Err(format!("Unexpected {}", c))
-        }
-    })
-}
-
-pub fn string<'a, 'patt>(patt: MaybeOwned<'patt>) -> Parser<'a, 'patt, &'a str> {
-    struct Closure<'patt>(MaybeOwned<'patt>);
-    impl <'a, 'patt>ParserAction<'a, &'a str> for Closure<'patt> {
-        fn run(&self, st: &State<'a>) -> Result<(&'a str, State<'a>), String> {
-            let &Closure(ref patt,) = self;
-            let &State(s, l) = st;
-            let len = s.len();
-            if len < patt.len() { return Err("Unexpected End of Input".to_string()) }
-            
-            let ss = s.slice_to(len);
-            if ss == patt.as_slice() {
-                Ok((ss, State(s.slice_from(len), l.advance(ss))))
-            } else {
-                Err("Unexpected Text".to_string())
-            }
-        }
-    }
-    box Closure(patt)
-}
-
-pub fn regex<'a>(patt: Regex) -> Parser<'a, 'static, &'a str> {
-    struct Closure(Regex);
-    impl <'a>ParserAction<'a, &'a str> for Closure {
-        fn run(&self, st: &State<'a>) -> Result<(&'a str, State<'a>), String> {
-            let &Closure(ref patt,) = self;
-            let &State(s, l) = st;
-            
-            if let Some((0, len)) = patt.find(s) {
-                let ns = s.slice_to(len);
-                Ok((ns, State(s.slice_from(len), l.advance(ns))))
-            } else {
-                Err("Unexpected".to_string())
-            }
-        }
-    }
-    box Closure(patt)
-}
-
-pub fn sosososos<'a>(patt: MaybeOwned<'static>) -> Parser<'a, 'static, &'a str> {
-    then(white(), string(patt))
-}
-// pub fn wstring<'a, 'patt>(patt: MaybeOwned<'patt>) -> Parser<'a, 'patt, &'a str> {
-//     then(white(), string(patt))
-// }
-
 pub fn literal<'a>(toks: &'a [Token]) -> Result<(Expr, &'a [Token]), String> {
     match toks[0] {
         LIT_INTEGER(x) => Ok((IntExpr(x), toks.slice_from(1))),

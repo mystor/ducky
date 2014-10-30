@@ -4,9 +4,9 @@ name = "lang"
 version = "0.0.1"
 authors = [ "Michael Layzell <michael@thelayzells.com>" ]
 
-[dependencies.lambdas]
+[dependencies.string_cache]
 
-git = "https://github.com/mystor/lambda-macro.git"
+git = "https://github.com/servo/string-cache.git"
 
 [[bin]]
 

@@ -2,11 +2,52 @@
 name = "lang"
 version = "0.0.1"
 dependencies = [
- "lambdas 0.0.1 (git+https://github.com/mystor/lambda-macro.git#5342f926700cffe74a1d3a2f83dc11f2b5d06d71)",
+ "string_cache 0.0.0 (git+https://github.com/servo/string-cache.git#17f96a5586160a25fd6795597ceb6f24b0b3afc2)",
 ]
 
 [[package]]
-name = "lambdas"
+name = "lazy_static"
+version = "0.1.0"
+source = "git+https://github.com/Kimundi/lazy-static.rs#62976cb611c5396e11315ae64c9c389576240eb7"
+
+[[package]]
+name = "phf"
+version = "0.0.0"
+source = "git+https://github.com/sfackler/rust-phf#83a8116c71bf1cbf28d51d269b4c214e13748509"
+dependencies = [
+ "xxhash 0.0.1 (git+https://github.com/Jurily/rust-xxhash#b1361187f6480f80551e49b248f61b8ccf6d2c53)",
+]
+
+[[package]]
+name = "phf_mac"
+version = "0.0.0"
+source = "git+https://github.com/sfackler/rust-phf#83a8116c71bf1cbf28d51d269b4c214e13748509"
+dependencies = [
+ "xxhash 0.0.1 (git+https://github.com/Jurily/rust-xxhash#b1361187f6480f80551e49b248f61b8ccf6d2c53)",
+]
+
+[[package]]
+name = "string_cache"
+version = "0.0.0"
+source = "git+https://github.com/servo/string-cache.git#17f96a5586160a25fd6795597ceb6f24b0b3afc2"
+dependencies = [
+ "lazy_static 0.1.0 (git+https://github.com/Kimundi/lazy-static.rs#62976cb611c5396e11315ae64c9c389576240eb7)",
+ "phf 0.0.0 (git+https://github.com/sfackler/rust-phf#83a8116c71bf1cbf28d51d269b4c214e13748509)",
+ "phf_mac 0.0.0 (git+https://github.com/sfackler/rust-phf#83a8116c71bf1cbf28d51d269b4c214e13748509)",
+ "string_cache_macros 0.0.0 (git+https://github.com/servo/string-cache.git#17f96a5586160a25fd6795597ceb6f24b0b3afc2)",
+ "xxhash 0.0.1 (git+https://github.com/Jurily/rust-xxhash#b1361187f6480f80551e49b248f61b8ccf6d2c53)",
+]
+
+[[package]]
+name = "string_cache_macros"
+version = "0.0.0"
+source = "git+https://github.com/servo/string-cache.git#17f96a5586160a25fd6795597ceb6f24b0b3afc2"
+dependencies = [
+ "lazy_static 0.1.0 (git+https://github.com/Kimundi/lazy-static.rs#62976cb611c5396e11315ae64c9c389576240eb7)",
+]
+
+[[package]]
+name = "xxhash"
 version = "0.0.1"
-source = "git+https://github.com/mystor/lambda-macro.git#5342f926700cffe74a1d3a2f83dc11f2b5d06d71"
+source = "git+https://github.com/Jurily/rust-xxhash#b1361187f6480f80551e49b248f61b8ccf6d2c53"
 
