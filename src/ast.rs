@@ -28,6 +28,7 @@ pub enum Stmt {
 
 #[deriving(Show)]
 pub enum Expr {
+    IdentExpr(Ident),
     IntExpr(int),
     StrExpr(String),
     FloatExpr(f64),

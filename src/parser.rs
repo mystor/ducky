@@ -1,7 +1,7 @@
 use std::fmt;
 
 use lexer::{Token, IDENT, LIT_INTEGER, LIT_FLOAT, LPAREN, RPAREN, COMMA};
-use ast::{Expr, FnExpr, IntExpr, FloatExpr, Ident};
+use ast::{Expr, FnExpr, IntExpr, FloatExpr, Ident, IdentExpr};
 
 #[deriving(PartialEq, Eq, Clone)]
 pub struct Loc {
@@ -53,6 +53,30 @@ macro_rules! token {
     }
 }
 
+macro_rules! alts {
+    ($st:expr => $first:expr; :err $err: expr) => {
+        match ($first)($st) {
+            Ok(x) => Ok(x),
+            Err(e) => {
+                let mut errs = Vec::new();
+                errs.push(e);
+                ($err)(&mut errs)
+            }
+        }
+    };
+    ($st:expr => $first:expr, $($rest:expr),+; :err $err:expr) => {
+        match ($first)($st) {
+            Ok(x) => Ok(x),
+            Err(e) => {
+                alts!($st => $($rest),+; :err |errs: &mut Vec<String>| {
+                    errs.push(e.clone());
+                    ($err)(errs)
+                })
+            }
+        }
+    }
+}
+
 pub type State<'a> = &'a [Token];
 pub type Parsed<'a, A> = Result<(A, State<'a>), String>;
 
@@ -78,7 +102,14 @@ pub fn parse_ident<'a>(st: State<'a>) -> Parsed<'a, Ident> {
 }
 
 pub fn parse_expr<'a>(st: State<'a>) -> Parsed<'a, Expr> {
-    Err("".to_string())
+    alts!(st =>
+        |st| { parse_ident(st).map(|(i, st)| { (IdentExpr(i), st) }) },
+        |st| { parse_fn(st) };
+
+        :err |errs: &mut Vec<String>| {
+            Err(format!("{}", errs))
+        }
+    )
 }
 
 pub fn parse_args<'a>(st: State<'a>) -> Parsed<'a, Vec<Ident>> {
