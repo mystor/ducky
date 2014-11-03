@@ -44,9 +44,9 @@ fn type_check_expr(expr: &mut Expr, env: &mut Environment) -> Result<Ty, ()> {
     match *expr {
         LiteralExpr(ref lit) => { Ok(lit.ty()) },
         IdentExpr(ref id, ref mut ty) => {
-            let nty = env.lookup_type(id);
-            *ty = nty.map(|x| x.clone());
-            nty.map(|x: &Ty| x.clone()).ok_or(())
+            let nty = env.lookup_type(id).map(|x| x.clone());
+            *ty = nty.clone();
+            nty.ok_or(())
         },
         _ => unimplemented!()
     }
