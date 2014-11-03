@@ -1,4 +1,4 @@
-#![feature(phase, if_let, macro_rules)]
+#![feature(phase, if_let, macro_rules, globs)]
 
 // We're going to use a lot of regular expressions
 #[phase(plugin)]
@@ -7,6 +7,8 @@ extern crate regex;
 
 extern crate string_cache;
 
+pub mod il;
+pub mod infer;
 pub mod ast;
 pub mod lexer;
 pub mod parser;
