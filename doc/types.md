@@ -18,7 +18,6 @@ Functions are of the form `(Ty, Ty, ...) -> Ty`, and represent a mapping from ty
 ### Records
 Records contain some set of key-value pairs (`ident: Ty`), and a set of methods (`ident: (self, ...) -> Ty`). They can be written in an extensible manner: `a{ ident: Ty }` represents the record containing all of the fields and methods of `a`, with the addition of `ident: Ty`. Multiple records can be composed together with `a:b{ ident: Ty }`. In this case, `a`, `b` and `{ ident: Ty }` may share no fields or methods.
 
-
 #### Named Records
 Sometimes, you need to avoid Ducky's duck typing system, and prevent custom objects which look the same from being declared and passed into functions. This is mostly important for FFIs and other low level concepts which are not implemented within Ducky's structural type system, but rather in a nominal type system.
 
@@ -61,7 +60,7 @@ It doesn't make sense to model all numbers as recursive Records. Because of that
 ```
 type Num[a] = { '+: (self, a) -> a, '-: (self, a) -> a, '*: (self, a) -> a, '/: (self, a) -> a }
 
-type Int = [[Int]]:Num[Int]
+type Int = #Int#:Num[Int]
 ```
 
-Where `[[Int]]` is the internal name `Int`, which cannot be created for custom records in user code. You can't actually write `[[Int]]` as it is not exported to user code. Only the fundamental type `Int` is exported
+Where `#Int#` is the internal name `Int`, which cannot be created for custom records in user code. You can't actually write `#Int#` as it is not exported to user code. Only the fundamental type `Int` is exported
