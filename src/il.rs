@@ -55,10 +55,11 @@ pub enum Call {
 #[deriving(Show, Clone)]
 pub enum Expr {
     LiteralExpr(Literal),
-    IdentExpr(Ident, Option<Ty>),
-    RecExpr(Vec<Prop>, Option<Ty>),
-    CallExpr(Call, Option<Ty>),
-    FnExpr(Vec<Ident>, Vec<Stmt>, Option<Ty>),
+    IdentExpr(Ident),
+    RecExpr(Vec<Prop>),
+    CallExpr(Call),
+    FnExpr(Vec<Ident>, Box<Expr>),
+    BlockExpr(Vec<Stmt>),
 }
 
 #[deriving(Show, Clone)]

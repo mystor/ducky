@@ -35,7 +35,7 @@ pub fn unify(env: &mut Environment, a: &Ty, b: &Ty) -> Result<(), String> {
     // Generate a set of substitutions such that a == b in env
     match (a, b) {
         (&IdentTy(ref a), b) => {
-            if let Some(ref ty) = env.lookup_data_var(a).clone() {
+            if let Some(ref ty) = env.lookup_type_var(a).clone() {
                 // The type name is explicit, resolve it
                 unify(env, ty, b)
             } else {
@@ -46,7 +46,7 @@ pub fn unify(env: &mut Environment, a: &Ty, b: &Ty) -> Result<(), String> {
         }
         (a, &IdentTy(ref b)) => {
             // TODO: Check if I should do this
-            if let Some(ref ty) = env.lookup_data_var(b).clone() {
+            if let Some(ref ty) = env.lookup_type_var(b).clone() {
                 unify(env, ty, a)
             } else {
                 env.substitute(b.clone(), a.clone());
@@ -54,7 +54,19 @@ pub fn unify(env: &mut Environment, a: &Ty, b: &Ty) -> Result<(), String> {
             }
         }
         (&FnTy(ref aargs, ref ares), &FnTy(ref bargs, ref bres)) => {
-            Ok(())
+            // Argument lists must have the same length for functions to unify
+            // This is usually handled by currying which may exist in this language later
+            if aargs.len() != bargs.len() {
+                return Err(format!("Cannot unify {} and {}", a, b));
+            }
+            
+            // Unify each of the arguments
+            for (aarg, barg) in aargs.iter().zip(bargs.iter()) {
+                try!(unify(env, aarg, barg));
+            }
+            
+            // Unify the results
+            unify(env, &**ares, &**bres)
         }
         (&RecTy(_), &RecTy(_)) => { unimplemented!() }
         _ => {
@@ -63,3 +75,75 @@ pub fn unify(env: &mut Environment, a: &Ty, b: &Ty) -> Result<(), String> {
     }
 }
 
+pub fn infer_expr(env: &mut Environment, e: &Expr) -> Result<Ty, String> {
+    match *e {
+        LiteralExpr(ref lit) => { Ok(lit.ty()) } // We probably can just inline that
+        IdentExpr(ref ident) => {
+            env.lookup_data_var(ident).ok_or(
+                format!("ICE: Unable to lookup type variable for ident: {}", ident))
+        }
+        CallExpr(FnCall(ref callee, ref params)) => {
+            let callee_ty = try!(infer_expr(env, &**callee));
+            let mut param_tys = Vec::with_capacity(params.len());
+            for param in params.iter() {
+                match infer_expr(env, param) {
+                    Ok(ty) => { param_tys.push(ty); }
+                    Err(err) => { return Err(err); }
+                }
+            }
+            let beta = IdentTy(env.introduce_type_var());
+            // TODO: Vastly improve this error message
+            try!(unify(env, &callee_ty, &FnTy(param_tys, box beta.clone())));
+            Ok(beta)
+        }
+        CallExpr(_) => { unimplemented!() }
+        FnExpr(ref params, ref body) => {
+            let body_ty = try!(infer_expr(env, &**body));
+            let mut param_tys = Vec::with_capacity(params.len());
+            for param in params.iter() {
+                match env.lookup_data_var(param) {
+                    Some(ty) => { param_tys.push(ty); }
+                    None => {
+                        return Err(format!(
+                            "ICE: Unable to look up type of function parameter: {}", param));
+                    }
+                }
+            }
+            Ok(FnTy(param_tys, box body_ty))
+        }
+        RecExpr(_) => { unimplemented!() }
+        BlockExpr(ref stmts) => {
+            // Infer for each value but the last one
+            for stmt in stmts.init().iter() {
+                try!(infer_stmt(env, stmt));
+            }
+            // Run the last one
+            match stmts.last() {
+                Some(&ExprStmt(ref expr)) => {
+                    return infer_expr(env, expr);
+                }
+                Some(stmt) => {
+                    try!(infer_stmt(env, stmt));
+                }
+                None => {}
+            }
+            // If the last element isn't an Expression, the value is Null ({})
+            Ok(IdentTy(Ident(Atom::from_slice("Null"), BuiltIn)))
+        }
+    }
+}
+
+pub fn infer_stmt(env: &mut Environment, stmt: &Stmt) -> Result<(), String> {
+    match *stmt {
+        ExprStmt(ref expr) => {
+            try!(infer_expr(env, expr));
+            Ok(())
+        }
+        LetStmt(ref ident, ref expr) => {
+            let ty = try!(infer_expr(env, expr));
+            // TODO: Better error message on failure
+            let ident = env.lookup_data_var(ident).unwrap();
+            unify(env, &ident, &ty)
+        }
+    }
+}
