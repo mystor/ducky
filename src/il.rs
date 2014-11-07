@@ -1,18 +1,26 @@
 use string_cache::Atom;
+use std::fmt;
 
 #[deriving(Show, PartialEq, Eq, Hash, Clone)]
 pub enum Context {
-    Internal(int),
+    Internal(uint),
     BuiltIn,
     User,
 }
 
-#[deriving(Show, PartialEq, Eq, Hash, Clone)]
+#[deriving(PartialEq, Eq, Hash, Clone)]
 pub struct Ident(pub Atom, pub Context);
 
 impl Ident {
     pub fn from_user_slice(s: &str) -> Ident {
         Ident(Atom::from_slice(s), User)
+    }
+}
+
+impl fmt::Show for Ident {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Ident(ref atom, ref context) = *self;
+        write!(f, "{}::{}", context, atom.as_slice())
     }
 }
 
