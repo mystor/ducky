@@ -2,6 +2,7 @@ use string_cache::Atom;
 
 #[deriving(Show, PartialEq, Eq, Hash, Clone)]
 pub enum Context {
+    Internal(int),
     BuiltIn,
     User,
 }
@@ -10,16 +11,15 @@ pub enum Context {
 pub struct Ident(pub Atom, pub Context);
 
 #[deriving(Show, Clone)]
-pub enum TyAttr {
-    ValTyAttr(Ident, Ty),
-    MethodTyAttr(Ident, Ty),
+pub enum TyProp {
+    ValTyProp(Ident, Ty),
+    MethodTyProp(Ident, Ty),
 }
 
 #[deriving(Show, Clone)]
 pub enum Ty {
-    ForAllTy(Ident, Box<Ty>),
     IdentTy(Ident),
-    ObjTy(Vec<TyAttr>),
+    RecTy(Vec<TyProp>),
     FnTy(Vec<Ty>, Box<Ty>),
 }
 
@@ -41,9 +41,9 @@ impl Literal {
 }
 
 #[deriving(Show, Clone)]
-pub enum Attr {
-    ValAttr(Ident, Expr),
-    MethodAttr(Ident, Expr),
+pub enum Prop {
+    ValProp(Ident, Expr),
+    MethodProp(Ident, Expr),
 }
 
 #[deriving(Show, Clone)]
@@ -56,7 +56,7 @@ pub enum Call {
 pub enum Expr {
     LiteralExpr(Literal),
     IdentExpr(Ident, Option<Ty>),
-    ObjExpr(Vec<Attr>, Option<Ty>),
+    RecExpr(Vec<Prop>, Option<Ty>),
     CallExpr(Call, Option<Ty>),
     FnExpr(Vec<Ident>, Vec<Stmt>, Option<Ty>),
 }

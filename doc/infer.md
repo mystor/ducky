@@ -6,8 +6,9 @@ The type inference algorithm is based off of the [Algorithm W](http://prooftoys.
 Before the type inference algorithms are run, we have done some preprocessing. These are the
 assumptions which we are going to make about the state of the system at this time:
 
-- All identifiers are unique, and have been made unique
-- Every identifier has been assigned a unique unbounded type variable, which can be specialized
+- All identifiers are unique, and are assigned exactly once. There is no shadowing. This was done in an earlier step.
+- Every identifier has been assigned a unique unbounded type variable.
+- There is a source of unlimited unique type variables
 
 ## Unify
 
