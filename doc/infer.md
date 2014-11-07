@@ -1,6 +1,6 @@
 # Type Inference Algorithm
 
-The type inference algorithm is based off of the Algorithm W for the Hindley-Damas-Milner Type System.
+The type inference algorithm is based off of the [Algorithm W](http://prooftoys.org/ian-grant/hm/milner-damas.pdf). for the Hindley-Milner Type System.
 
 ## Unify
 
