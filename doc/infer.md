@@ -2,6 +2,13 @@
 
 The type inference algorithm is based off of the [Algorithm W](http://prooftoys.org/ian-grant/hm/milner-damas.pdf). for the Hindley-Milner Type System.
 
+## Preconditions
+Before the type inference algorithms are run, we have done some preprocessing. These are the
+assumptions which we are going to make about the state of the system at this time:
+
+- All identifiers are unique, and have been made unique
+- Every identifier has been assigned a unique unbounded type variable, which can be specialized
+
 ## Unify
 
 > Proposition 3 (Robinson). There is an algorithm U which, given a pair of types, either
@@ -95,3 +102,39 @@ unify (Rec namesa reca) (Rec namesb recb) =
 
 ### Problems
 - Recursive records could lead to infinite loop. Detect infinite loops & allow for early abortion. Detect if two types are different ASAP.
+
+## The Inference Algorithm
+Algorithm W makes some assumptions which are difficult to cope with in our language. For example, the primitive algorithm doesn't permit mutual recursion, which is very valuable with our weird type system.
+
+Algorithm W is as follows (mostly, this was copy pasted from a PDF, so the formatting is off):
+    W (A,e) = (S,τ) where
+
+    (i) If e is x and there is an assumption x :∀α_1,...,α_nτ' in A then S = Id2 and τ = [βi /αi]τ' where the β_i s are new.
+
+    (ii) If e is e1 e2 then let W(A,e_2) = (S_1 ,τ_2) and W (S_1A,e_2) = (S_2 ,τ2) and U(S_2τ_1,τ2 → β) = V where β is new; then S = V S_2 S_1 and τ = V β.
+
+    (iii) If e is λx.e1 then let β be a new type variable and W(A_x ∪{x :β},e_1) = (S_1 ,τ_1); then S = S_1 and τ = S_1β → τ_1.
+
+    (iv) If e is let x = e_1 in e_2 then let W (A,e_1) = (S_1 ,τ_2) and W (S_1Ax∪{x : S_1A(τ_1)},e_2) = (S_2 ,τ_2); then S = S_2 S_1 and τ = τ_2.
+
+```
+algW env (Ident x) =
+    (emptySet, (lookup env x).unwrap)
+algW env (App e1 e2) =
+    let (S1, T1) = algW(env, e1)
+    let (S2, T2) = algW(S1(env), e2)
+    let V = unify(S1(T1), T2 -> newVariableBeta)
+    (V(S2(S1)), V(newVariableBeta))
+algW env (Abs x e) =
+    let B = newVariableBeta // Actually unnecessary because already done for all variables
+    let (S1, T1) = algW(env, e)
+    (S1, (lookup S1(env) x) -> T1)
+// Notably missing: methods, record literals, record extensions
+
+// Not really in algW as it doesn't have a type... and isn't an expression... 
+algW env (Let x e) =
+    let (S1, T1) = algW(env, e)
+    // Unify the type for x into x. If this fails, we're screwed
+    let V = unify((lookup S1(env) x), T1)
+    (V(S1), _)
+```
