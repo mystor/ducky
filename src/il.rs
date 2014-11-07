@@ -10,6 +10,12 @@ pub enum Context {
 #[deriving(Show, PartialEq, Eq, Hash, Clone)]
 pub struct Ident(pub Atom, pub Context);
 
+impl Ident {
+    pub fn from_user_slice(s: &str) -> Ident {
+        Ident(Atom::from_slice(s), User)
+    }
+}
+
 #[deriving(Show, Clone)]
 pub enum TyProp {
     ValTyProp(Ident, Ty),

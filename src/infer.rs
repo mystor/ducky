@@ -2,6 +2,7 @@ use string_cache::Atom;
 use std::collections::HashMap;
 use il::*;
 
+#[deriving(Show)]
 pub struct Environment {
     data_vars: HashMap<Ident, Ty>,
     type_vars: HashMap<Ident, Ty>,
@@ -145,5 +146,45 @@ pub fn infer_stmt(env: &mut Environment, stmt: &Stmt) -> Result<(), String> {
             let ident = env.lookup_data_var(ident).unwrap();
             unify(env, &ident, &ty)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use il::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn literals() {
+        let stmts = vec![
+            LetStmt(Ident::from_user_slice("id1"),
+                    FnExpr(vec![Ident::from_user_slice("x1")],
+                           box IdentExpr(Ident::from_user_slice("x1")))),
+            LetStmt(Ident::from_user_slice("id2"),
+                    FnExpr(vec![Ident::from_user_slice("x2")],
+                           box IdentExpr(Ident::from_user_slice("x2")))),
+            LetStmt(Ident::from_user_slice("x"),
+                    CallExpr(FnCall(box IdentExpr(Ident::from_user_slice("id1")),
+                                    vec![IdentExpr(Ident::from_user_slice("id2"))])))];
+        info!("{}", stmts);
+        // Create the environment - we don't have a easy way to do taht yet
+        let mut env = Environment{
+            data_vars: HashMap::new(),
+            type_vars: HashMap::new(),
+            counter: 0,
+        };
+
+        for ident in vec![Ident::from_user_slice("id1"),
+                          Ident::from_user_slice("x1"),
+                          Ident::from_user_slice("id2"),
+                          Ident::from_user_slice("x2"),
+                          Ident::from_user_slice("x")].iter() {
+            let ty = env.introduce_type_var();
+            env.data_vars.insert(ident.clone(), IdentTy(ty));
+        }
+
+        info!("{}", infer_expr(&mut env, &BlockExpr(stmts)));
+        info!("{}", env);
     }
 }

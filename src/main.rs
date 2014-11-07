@@ -5,6 +5,9 @@
 extern crate regex_macros;
 extern crate regex;
 
+#[phase(plugin, link)]
+extern crate log;
+
 extern crate string_cache;
 
 pub mod il;
