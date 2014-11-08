@@ -21,17 +21,43 @@ impl Environment {
     }
     
     // Creating a unique type variable
-    fn introduce_type_var(&mut self) -> Ident {
+    fn introduce_type_var(&mut self) -> Ty {
         let chars = "αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨω";
         let id = chars.slice_chars(self.counter % chars.len(), self.counter % chars.len() + 1);
         self.counter += 1;
         // TODO: Better symbol name
-        Ident(Atom::from_slice(id), Internal(self.counter))
+        IdentTy(Ident(Atom::from_slice(id), Internal(self.counter)))
     }
     
     // Perform a substitution (bind the type variable id)
     fn substitute(&mut self, id: Ident, ty: Ty) {
         self.type_vars.insert(id, ty);
+    }
+    
+    fn instantiate(&mut self, ty: &Ty, mappings: &mut HashMap<Ident, Ty>) -> Ty {
+        match *ty {
+            IdentTy(ref id) => {
+                if self.lookup_type_var(id).is_some() {
+                    ty.clone()
+                } else {
+                    // This is an unbound variable, look up the name we have given
+                    // it in the instance, or give it a new name
+                    let lookup = mappings.find(id).map(|x| { x.clone() });
+                    lookup.unwrap_or_else(|| {
+                        let ty_var = self.introduce_type_var();
+                        mappings.insert(id.clone(), ty_var.clone());
+                        ty_var
+                    })
+                }
+            }
+            RecTy(ref props) => {
+                unimplemented!()
+            }
+            FnTy(ref args, ref res) => {
+                let nargs = args.iter().map(|x| { self.instantiate(x, mappings) }).collect();
+                FnTy(nargs, box self.instantiate(&**res, mappings))
+            }
+        }
     }
 }
 
@@ -83,10 +109,12 @@ pub fn infer_expr(env: &mut Environment, e: &Expr) -> Result<Ty, String> {
     match *e {
         LiteralExpr(ref lit) => { Ok(lit.ty()) } // We probably can just inline that
         IdentExpr(ref ident) => {
-            env.lookup_data_var(ident).ok_or(
-                format!("ICE: Unable to lookup type variable for ident: {}", ident))
+            let uninst = try!(env.lookup_data_var(ident).ok_or(
+                format!("ICE: Unable to lookup type variable for ident: {}", ident)));
+            Ok(env.instantiate(&uninst, &mut HashMap::new()))
         }
         CallExpr(FnCall(ref callee, ref params)) => {
+            info!("CALL: {}", env);
             let callee_ty = try!(infer_expr(env, &**callee));
             let mut param_tys = Vec::with_capacity(params.len());
             for param in params.iter() {
@@ -95,7 +123,7 @@ pub fn infer_expr(env: &mut Environment, e: &Expr) -> Result<Ty, String> {
                     Err(err) => { return Err(err); }
                 }
             }
-            let beta = IdentTy(env.introduce_type_var());
+            let beta = env.introduce_type_var();
             // TODO: Vastly improve this error message
             try!(unify(env, &callee_ty, &FnTy(param_tys, box beta.clone())));
             Ok(beta)
@@ -184,7 +212,7 @@ mod tests {
                           Ident::from_user_slice("x2"),
                           Ident::from_user_slice("x")].iter() {
             let ty = env.introduce_type_var();
-            env.data_vars.insert(ident.clone(), IdentTy(ty));
+            env.data_vars.insert(ident.clone(), ty);
         }
 
         info!("{}", infer_expr(&mut env, &BlockExpr(stmts)));
