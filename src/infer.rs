@@ -23,8 +23,8 @@ impl Environment {
     // Creating a unique type variable
     fn introduce_type_var(&mut self) -> Ident {
         let chars = "αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨω";
-        self.counter += 1;
         let id = chars.slice_chars(self.counter % chars.len(), self.counter % chars.len() + 1);
+        self.counter += 1;
         // TODO: Better symbol name
         Ident(Atom::from_slice(id), Internal(self.counter))
     }
