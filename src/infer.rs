@@ -112,8 +112,29 @@ impl <'a>Scope<'a> {
                     })
                 }
             }
-            RecTy(ref props) => {
-                unimplemented!()
+            RecTy(ref extends, ref props) => {
+                // Instantiate all of the properties!
+                let extends = match *extends { // @TODO: Why can't I .map()?
+                    box Some(ref extends) => Some(self.instantiate(extends, mappings)),
+                    box None => None,
+                };
+                
+                let props = props.iter().map(|prop| {
+                    match *prop {
+                        ValTyProp(ref symb, ref ty) => {
+                            ValTyProp(symb.clone(), self.instantiate(ty, mappings))
+                        }
+                        MethodTyProp(ref symb, ref args, ref res) => {
+                            let nargs = args.iter().map(|x| {
+                                self.instantiate(x, mappings)
+                            }).collect();
+                            let nres = self.instantiate(res, mappings);
+                            MethodTyProp(symb.clone(), nargs, nres)
+                        }
+                    }
+                }).collect();
+
+                RecTy(box extends, props)
             }
             FnTy(ref args, ref res) => {
                 let nargs = args.iter().map(|x| { self.instantiate(x, mappings) }).collect();
@@ -132,6 +153,29 @@ impl <'a> DerefMut<Environment> for Scope<'a> {
 impl <'a> Deref<Environment> for Scope<'a> {
     fn deref<'a>(&'a self) -> &'a Environment {
         self.env.deref()
+    }
+}
+
+fn unify_props(scope: &mut Scope, a: &TyProp, b: &TyProp) -> Result<(), String> {
+    match (a, b) {
+        (&ValTyProp(_, ref aty), &ValTyProp(_, ref bty)) => {
+            unify(scope, aty, bty)
+        }
+        (&MethodTyProp(_, ref aargs, ref ares), &MethodTyProp(_, ref bargs, ref bres)) => {
+            if aargs.len() != bargs.len() {
+                return Err(format!("Cannot unify {} and {}", a, b));
+            }
+            
+            // Unify each of the arguments
+            for (aarg, barg) in aargs.iter().zip(bargs.iter()) {
+                try!(unify(scope, aarg, barg));
+            }
+
+            unify(scope, ares, bres)
+        }
+        _ => {
+            Err(format!("Cannot unify properties: {} and {}", a, b))
+        }
     }
 }
 
@@ -177,7 +221,100 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
             // Unify the results
             unify(scope, &**ares, &**bres)
         }
-        (&RecTy(_), &RecTy(_)) => { unimplemented!() }
+        (&RecTy(ref aextends, ref aprops), &RecTy(ref bextends, ref bprops)) => {
+            // // @FIX: This is horriffically inefficient
+            // // Also really ugly.
+            // // This code makes me feel sad deep inside
+            // if let box Some(ref base) = *aextends {
+            //     match *base {
+            //         RecTy(ref baseextends, ref baseprops) => {
+            //             let mut propsiter = aprops.iter().chain(baseprops.iter()).map(|x| x.clone());
+            //             return unify(scope,
+            //                          &RecTy(baseextends.clone(), propsiter.collect()),
+            //                          b);
+            //         }
+            //         IdentTy(ref ident) => {
+            //             if let Some(ref ty) = scope.lookup_type_var(ident) {
+            //                 return unify(scope,
+            //                              &RecTy(box Some(ty.clone()), aprops.clone()),
+            //                              b);
+            //             }
+            //         }
+            //         _ => {
+            //             return Err(format!("Cannot extend non-record type in record def"));
+            //         }
+            //     }
+            // }
+
+            // // @FIX: This is basicly the same as the above. Factor into a function at least?
+            // if let box Some(ref base) = *bextends {
+            //     match *base {
+            //         RecTy(ref baseextends, ref baseprops) => {
+            //             let mut propsiter = aprops.iter().chain(baseprops.iter()).map(|x| x.clone());
+            //             return unify(scope,
+            //                          a,
+            //                          &RecTy(baseextends.clone(), propsiter.collect()));
+            //         }
+            //         IdentTy(ref ident) => {
+            //             if let Some(ref ty) = scope.lookup_type_var(ident) {
+            //                 return unify(scope,
+            //                              a
+            //                              &RecTy(box Some(ty.clone()), aprops.clone()));
+            //             }
+            //         }
+            //         _ => {
+            //             return Err(format!("Cannot extend non-record type in record def"));
+            //         }
+            //     }
+            // }
+            
+            // @FIX: Add an assertion that this is true, or do some type of verification
+            // At this point, aextends and bextends are either Some(IdentTy) or None
+
+            // Find the intersection between aprops and bprops
+            let mut only_a = HashMap::new();
+            let mut only_b = HashMap::new();
+            let mut joint  = HashMap::new();
+
+            for aprop in aprops.iter() {
+                if let Some(bprop) = bprops.iter().find(|bprop| { aprop.symbol() == bprop.symbol() }) {
+                    joint.insert(aprop.symbol().clone(), (aprop, bprop));
+                } else {
+                    only_a.insert(aprop.symbol().clone(), aprop);
+                }
+            }
+            
+            for bprop in bprops.iter() {
+                if ! joint.contains_key(bprop.symbol()) {
+                    only_b.insert(bprop.symbol().clone(), bprop);
+                }
+            }
+            
+            // Unify all of the common properties
+            for &(aprop, bprop) in joint.values() {
+                try!(unify_props(scope, aprop, bprop));
+            }
+            
+            // @XXX
+            if ! only_a.is_empty() {
+                if let box Some(ref ty) = *bextends {
+                    try!(unify(scope, 
+                               &RecTy(aextends.clone(),
+                                      only_a.values().map(|x| x.clone().clone()).collect()),
+                               ty));
+                }
+            }
+            
+            if ! only_b.is_empty() {
+                if let box Some(ref ty) = *aextends {
+                    try!(unify(scope, ty,
+                               &RecTy(bextends.clone(),
+                                      only_b.values().map(|x| x.clone().clone()).collect())));
+                }
+            }
+            
+            Ok(())
+        }
         _ => {
             // TODO: This message itself should probably never be shown to
             // users of the compiler, it should be made more useful where
@@ -185,6 +322,20 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
             Err(format!("Cannot unify {} and {}", a, b))
         }
     }
+}
+
+fn infer_body(scope: &mut Scope, params: &Vec<Ident>, body: &Expr) -> Result<Ty, String> {
+    let bound = { // Determine the list of variables which should be bound
+        let transform = |x| {
+            if let IdentTy(id) = scope.lookup_data_var(x) {
+                id
+            } else { unreachable!() }
+        };
+        params.iter().map(transform).collect()
+    };
+
+    let mut new_scope = scope.new_child(bound);
+    infer_expr(&mut new_scope, body)
 }
 
 pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
@@ -208,28 +359,62 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
             try!(unify(scope, &callee_ty, &FnTy(param_tys, box beta.clone())));
             Ok(beta)
         }
-        CallExpr(_) => { unimplemented!() }
-        FnExpr(ref params, ref body) => {
-            let body_ty = {
-                let bound = { // Determine the list of variables which should be bound
-                    let transform = |x| {
-                        if let IdentTy(id) = scope.lookup_data_var(x) {
-                            id
-                        } else { unreachable!() }
-                    };
-                    params.iter().map(transform).collect()
-                };
+        CallExpr(MethodCall(ref obj, ref symb, ref params)) => {
+            let obj_ty = try!(infer_expr(scope, &**obj));
 
-                let mut new_scope = scope.new_child(bound);
-                try!(infer_expr(&mut new_scope, &**body))
-            };
+            let mut param_tys = Vec::with_capacity(params.len());
+            for param in params.iter() {
+                match infer_expr(scope, param) {
+                    Ok(ty) => { param_tys.push(ty); }
+                    Err(err) => { return Err(err); }
+                }
+            }
+            
+            let res = scope.introduce_type_var();
+            // The object must have the method with the correct type. UNIFY!
+            let require_ty = RecTy(box Some(scope.introduce_type_var()),
+                                   vec![MethodTyProp(symb.clone(), param_tys, res.clone())]);
+            try!(unify(scope, &obj_ty, &require_ty));
+            Ok(res)
+        }
+        FnExpr(ref params, ref body) => {
+            let body_ty = try!(infer_body(scope, params, &**body));
             let mut param_tys = Vec::with_capacity(params.len());
             for param in params.iter() {
                 param_tys.push(scope.lookup_data_var(param));
             }
             Ok(FnTy(param_tys, box body_ty))
         }
-        RecExpr(_) => { unimplemented!() }
+        RecExpr(ref props) => {
+            let self_type = scope.introduce_type_var();
+
+            let mut prop_tys = Vec::with_capacity(props.len());
+
+            for prop in props.iter() {
+                match *prop {
+                    ValProp(ref symb, ref expr) => {
+                        prop_tys.push(
+                            ValTyProp(symb.clone(), try!(infer_expr(scope, expr))))
+                    }
+                    MethodProp(ref symb, ref params, ref body) => {
+                        // Unify the first variable's type with self_type
+                        // TODO: Do this at the end?
+                        let first_type = scope.lookup_data_var(&params[0]);
+                        try!(unify(scope, &first_type, &self_type));
+
+                        let body_ty = try!(infer_body(scope, params, body));
+                        let mut param_tys = Vec::with_capacity(params.len());
+                        for param in params.iter() {
+                            param_tys.push(scope.lookup_data_var(param));
+                        }
+                        prop_tys.push(
+                            MethodTyProp(symb.clone(), param_tys, body_ty))
+                    }
+                }
+            }
+            
+            Ok(RecTy(box None, prop_tys))
+        }
         BlockExpr(ref stmts) => {
             // Infer for each value but the last one
             for stmt in stmts.init().iter() {
@@ -286,6 +471,20 @@ mod tests {
             LetStmt(Ident::from_user_slice("x"),
                     CallExpr(FnCall(box IdentExpr(Ident::from_user_slice("id")),
                                     vec![IdentExpr(Ident::from_user_slice("id"))])))];
+        
+        debug!("{}", infer_prgm(stmts));
+    }
+    
+    #[test]
+    fn basic_method_call() {
+        let stmts = vec![
+            LetStmt(Ident::from_user_slice("myfn"),
+                    FnExpr(vec![Ident::from_user_slice("x")],
+                           box BlockExpr(vec![
+                               ExprStmt(CallExpr(MethodCall(box IdentExpr(Ident::from_user_slice("x")),
+                                                            Symbol::from_slice("foo"),
+                                                            vec![LiteralExpr(IntLit(5))])))])))
+            ];
         
         debug!("{}", infer_prgm(stmts));
     }

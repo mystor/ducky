@@ -38,14 +38,32 @@ impl Symbol {
 #[deriving(Show, Clone)]
 pub enum TyProp {
     ValTyProp(Symbol, Ty),
-    MethodTyProp(Symbol, Ty),
+    MethodTyProp(Symbol, Vec<Ty>, Ty),
+}
+
+impl TyProp {
+    pub fn symbol<'a>(&'a self) -> &'a Symbol {
+        match *self {
+            ValTyProp(ref s, _) => s,
+            MethodTyProp(ref s, _, _) => s,
+        }
+    }
 }
 
 #[deriving(Show, Clone)]
 pub enum Ty {
     IdentTy(Ident),
-    RecTy(Vec<TyProp>),
+    RecTy(Box<Option<Ty>>, Vec<TyProp>),
     FnTy(Vec<Ty>, Box<Ty>),
+}
+
+impl Ty {
+    pub fn unwrap_ident(&self) -> Ident {
+        match *self {
+            IdentTy(ref id) => id.clone(),
+            _ => panic!("ICE: Couldn't Unwrap Identifier"),
+        }
+    }
 }
 
 #[deriving(Show, Clone)]
@@ -68,7 +86,7 @@ impl Literal {
 #[deriving(Show, Clone)]
 pub enum Prop {
     ValProp(Symbol, Expr),
-    MethodProp(Symbol, Expr),
+    MethodProp(Symbol, Vec<Ident>, Expr),
 }
 
 #[deriving(Show, Clone)]
