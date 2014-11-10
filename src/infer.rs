@@ -12,11 +12,11 @@ pub struct Environment {
 impl Environment {
     // Accessors for the data from the environment
     fn lookup_type_var(&self, id: &Ident) -> Option<Ty> {
-        self.type_vars.find(id).map(|x| { x.clone() })
+        self.type_vars.get(id).map(|x| { x.clone() })
     }
 
     fn lookup_data_var(&mut self, id: &Ident) -> Ty {
-        if let Some(ty) = self.data_vars.find(id) {
+        if let Some(ty) = self.data_vars.get(id) {
             return ty.clone();
         }
 
@@ -104,7 +104,7 @@ impl <'a>Scope<'a> {
                 } else {
                     // This is an unbound variable, look up the name we have given
                     // it in the instance, or give it a new name
-                    let lookup = mappings.find(id).map(|x| { x.clone() });
+                    let lookup = mappings.get(id).map(|x| { x.clone() });
                     lookup.unwrap_or_else(|| {
                         let ty_var = self.introduce_type_var();
                         mappings.insert(id.clone(), ty_var.clone());
