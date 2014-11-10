@@ -67,8 +67,6 @@ impl <'a> DerefMut<Environment> for MaybeOwnedEnv<'a> {
     }
 }
     
-
-
 #[deriving(Show)]
 pub struct Scope<'a> {
     env: MaybeOwnedEnv<'a>,
@@ -181,6 +179,9 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
         }
         (&RecTy(_), &RecTy(_)) => { unimplemented!() }
         _ => {
+            // TODO: This message itself should probably never be shown to
+            // users of the compiler, it should be made more useful where
+            // unify() is called.
             Err(format!("Cannot unify {} and {}", a, b))
         }
     }

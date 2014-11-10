@@ -8,6 +8,7 @@ pub enum Context {
     User,
 }
 
+//| Identifiers are names used for type and data variables
 #[deriving(PartialEq, Eq, Hash, Clone)]
 pub struct Ident(pub Atom, pub Context);
 
@@ -24,10 +25,20 @@ impl fmt::Show for Ident {
     }
 }
 
+//| Symbols are names used for properties and methods
+#[deriving(Show, PartialEq, Eq, Hash, Clone)]
+pub struct Symbol(pub Atom);
+
+impl Symbol {
+    pub fn from_slice(s: &str) -> Symbol {
+        Symbol(Atom::from_slice(s))
+    }
+}
+
 #[deriving(Show, Clone)]
 pub enum TyProp {
-    ValTyProp(Ident, Ty),
-    MethodTyProp(Ident, Ty),
+    ValTyProp(Symbol, Ty),
+    MethodTyProp(Symbol, Ty),
 }
 
 #[deriving(Show, Clone)]
@@ -56,14 +67,14 @@ impl Literal {
 
 #[deriving(Show, Clone)]
 pub enum Prop {
-    ValProp(Ident, Expr),
-    MethodProp(Ident, Expr),
+    ValProp(Symbol, Expr),
+    MethodProp(Symbol, Expr),
 }
 
 #[deriving(Show, Clone)]
 pub enum Call {
     FnCall(Box<Expr>, Vec<Expr>),
-    MethodCall(Box<Expr>, Ident, Vec<Expr>),
+    MethodCall(Box<Expr>, Symbol, Vec<Expr>),
 }
 
 #[deriving(Show, Clone)]
