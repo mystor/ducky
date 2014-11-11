@@ -6,7 +6,7 @@
 
 ## Goals of the Ducky Type System
 - Code written in Ducky should not require explicit type declarations
-- Writing code in Ducky should feel like writing code in a runtime-checked dynamic programming language, except that they 
+- Writing code in Ducky should feel like writing code in a runtime-checked dynamic programming language, except that the code is less likely to crash at runtime
 - Ducky's type system should not prevent interaction with code written in a nominal type system
 
 ## Primitive Types
@@ -16,7 +16,10 @@ Ducky has a very small type system, which allows for massive flexibility. It con
 Functions are of the form `(Ty, Ty, ...) -> Ty`, and represent a mapping from types to types. They can have side effects. Functions are first-class in Ducky, and can be easily passed around as values.
 
 ### Records
-Records contain some set of key-value pairs (`ident: Ty`), and a set of methods (`ident: (self, ...) -> Ty`). They can be written in an extensible manner: `a{ ident: Ty }` represents the record containing all of the fields and methods of `a`, with the addition of `ident: Ty`. Multiple records can be composed together with `a:b{ ident: Ty }`. In this case, `a`, `b` and `{ ident: Ty }` may share no fields or methods.
+Records contain some set of key-value pairs (`ident: Ty`), and a set of methods (`ident: (self, ...) -> Ty`). They can be written in an extensible manner: `a{ ident: Ty }` represents the record containing all of the fields and methods of `a`, with the addition of `ident: Ty`. Multiple records can be composed together with `a:b{ ident: Ty }` (1). In this case, `a`, `b` and `{ ident: Ty }` may share no fields or methods.
+
+> (1): I'm not sure that I want to allow this. This will have to be syntax sugar which is removed
+> before the code reaches the IR stage, as multiple bases cannot exist at that level.
 
 #### Named Records
 Sometimes, you need to avoid Ducky's duck typing system, and prevent custom objects which look the same from being declared and passed into functions. This is mostly important for FFIs and other low level concepts which are not implemented within Ducky's structural type system, but rather in a nominal type system.
@@ -26,7 +29,7 @@ You can declare a name with the following syntax:
 name MyType
 ```
 
-Now, there is a non-exported, bottom record `#{MyType}#` which has a unique, non-copyable, type: `#MyType#`. It is impossible for user code to fake a value of type `#MyType#`, which means that any function which accepts a value of that type, must accept a value which was constructed by your code.
+Now, there is a non-exported, bottom record `#{MyType}#` which has a unique, non-copyable, type: `#MyType#` (2). It is impossible for user code to fake a value of type `#MyType#`, which means that any function which accepts a value of that type, must accept a value which was constructed by your code.
 
 The name would be used:
 ```
@@ -40,7 +43,7 @@ x := fn () {
 }
 ```
 
-Right now this is really ugly, so it will probably be changed at some point when I figure out a better way to do it.
+(2): These names are definitely not final, and I don't like them very much. For now, names will probably be limited to built in records. Right now this is really ugly, so it will probably be changed at some point when I figure out a better way to do it.
 
 ### Type Aliasing
 Functions and Records may be `aliased`, permitting recursive record data structures. Below are some examples of traditional data types implemented in Ducky:
