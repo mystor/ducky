@@ -222,55 +222,6 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
             unify(scope, &**ares, &**bres)
         }
         (&RecTy(ref aextends, ref aprops), &RecTy(ref bextends, ref bprops)) => {
-            // // @FIX: This is horriffically inefficient
-            // // Also really ugly.
-            // // This code makes me feel sad deep inside
-            // if let box Some(ref base) = *aextends {
-            //     match *base {
-            //         RecTy(ref baseextends, ref baseprops) => {
-            //             let mut propsiter = aprops.iter().chain(baseprops.iter()).map(|x| x.clone());
-            //             return unify(scope,
-            //                          &RecTy(baseextends.clone(), propsiter.collect()),
-            //                          b);
-            //         }
-            //         IdentTy(ref ident) => {
-            //             if let Some(ref ty) = scope.lookup_type_var(ident) {
-            //                 return unify(scope,
-            //                              &RecTy(box Some(ty.clone()), aprops.clone()),
-            //                              b);
-            //             }
-            //         }
-            //         _ => {
-            //             return Err(format!("Cannot extend non-record type in record def"));
-            //         }
-            //     }
-            // }
-
-            // // @FIX: This is basicly the same as the above. Factor into a function at least?
-            // if let box Some(ref base) = *bextends {
-            //     match *base {
-            //         RecTy(ref baseextends, ref baseprops) => {
-            //             let mut propsiter = aprops.iter().chain(baseprops.iter()).map(|x| x.clone());
-            //             return unify(scope,
-            //                          a,
-            //                          &RecTy(baseextends.clone(), propsiter.collect()));
-            //         }
-            //         IdentTy(ref ident) => {
-            //             if let Some(ref ty) = scope.lookup_type_var(ident) {
-            //                 return unify(scope,
-            //                              a
-            //                              &RecTy(box Some(ty.clone()), aprops.clone()));
-            //             }
-            //         }
-            //         _ => {
-            //             return Err(format!("Cannot extend non-record type in record def"));
-            //         }
-            //     }
-            // }
-            
-            // @FIX: Add an assertion that this is true, or do some type of verification
-            // At this point, aextends and bextends are either Some(IdentTy) or None
-
             // Find the intersection between aprops and bprops
             let mut only_a = HashMap::new();
             let mut only_b = HashMap::new();
@@ -295,13 +246,17 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
                 try!(unify_props(scope, aprop, bprop));
             }
             
-            // @XXX
+            // Merge the remaining values into the other maps
+            // @TODO: I have a sneaking suspicion that this is fundamentally incorrect...
             if ! only_a.is_empty() {
                 if let box Some(ref ty) = *bextends {
                     try!(unify(scope, 
                                &RecTy(aextends.clone(),
                                       only_a.values().map(|x| x.clone().clone()).collect()),
                                ty));
+                } else {
+                    // @TODO: This error message is awful
+                    return Err(format!("Cannot unify {} and {}", a, b));
                 }
             }
             
@@ -310,6 +265,9 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
                     try!(unify(scope, ty,
                                &RecTy(bextends.clone(),
                                       only_b.values().map(|x| x.clone().clone()).collect())));
+                } else {
+                    // @TODO: This error message is awful
+                    return Err(format!("Cannot unify {} and {}", a, b));
                 }
             }
             
