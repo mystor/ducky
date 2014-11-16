@@ -16,17 +16,31 @@ impl Ident {
     pub fn from_user_slice(s: &str) -> Ident {
         Ident(Atom::from_slice(s), User)
     }
+
+    pub fn from_builtin_slice(s: &str) -> Ident {
+        Ident(Atom::from_slice(s), BuiltIn)
+    }
 }
 
 impl fmt::Show for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Ident(ref atom, ref context) = *self;
-        write!(f, "{}::{}", context, atom.as_slice())
+        match *context {
+            User => {
+                write!(f, "{}", atom.as_slice())
+            }
+            BuiltIn => {
+                write!(f, "::{}", atom.as_slice())
+            }
+            Internal(i) => {
+                write!(f, "{}::{}", i, atom.as_slice())
+            }
+        }
     }
 }
 
 //| Symbols are names used for properties and methods
-#[deriving(Show, PartialEq, Eq, Hash, Clone)]
+#[deriving(PartialEq, Eq, Hash, Clone)]
 pub struct Symbol(pub Atom);
 
 impl Symbol {
@@ -35,7 +49,14 @@ impl Symbol {
     }
 }
 
-#[deriving(Show, Clone)]
+impl fmt::Show for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let Symbol(ref atom) = *self;
+        write!(f, "{}", atom.as_slice())
+    }
+}
+
+#[deriving(Clone)]
 pub enum TyProp {
     ValTyProp(Symbol, Ty),
     MethodTyProp(Symbol, Vec<Ty>, Ty),
@@ -50,7 +71,26 @@ impl TyProp {
     }
 }
 
-#[deriving(Show, Clone)]
+impl fmt::Show for TyProp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ValTyProp(ref symbol, ref ty) => {
+                write!(f, "{}: {}", symbol, ty)
+            }
+            MethodTyProp(ref symbol, ref args, ref res) => {
+                // @TODO: This is terrible syntax, but must differentiate
+                // from ValTyProp
+                try!(write!(f, "{}(", symbol));
+                for arg in args.iter() {
+                    try!(write!(f, "{}", arg));
+                }
+                write!(f, ") -> {}", res)
+            }
+        }
+    }
+}
+
+#[deriving(Clone)]
 pub enum Ty {
     IdentTy(Ident),
     RecTy(Box<Option<Ty>>, Vec<TyProp>),
@@ -65,6 +105,37 @@ impl Ty {
         }
     }
 }
+
+impl fmt::Show for Ty {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            IdentTy(ref id) => write!(f, "{}", id),
+            RecTy(box ref maybe_ty, ref props) => {
+                if let Some(ref ty) = *maybe_ty {
+                    try!(write!(f, "{}:{} ", ty, "{"));
+                    for prop in props.iter() {
+                        try!(write!(f, "{}", prop));
+                    }
+                    write!(f, " {}", "}")
+                } else {
+                    try!(write!(f, "{} ", "{"));
+                    for prop in props.iter() {
+                        try!(write!(f, "{}", prop));
+                    }
+                    write!(f, " {}", "}")
+                }
+            }
+            FnTy(ref args, box ref res) => {
+                try!(write!(f, "("));
+                for arg in args.iter() {
+                    try!(write!(f, "{}", arg));
+                }
+                write!(f, ") -> {}", res)
+            }
+        }
+    }
+}
+
 
 #[deriving(Show, Clone)]
 pub enum Literal {

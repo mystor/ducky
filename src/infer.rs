@@ -75,9 +75,16 @@ pub struct Scope<'a> {
 
 impl <'a>Scope<'a> {
     pub fn new() -> Scope<'static> {
+        // Type Variables
+        let mut type_vars = HashMap::new();
+        type_vars.insert(Ident::from_builtin_slice("Int"),
+                         RecTy(box None, vec![MethodTyProp(Symbol::from_slice("+"),
+                                                           vec![IdentTy(Ident::from_builtin_slice("Int"))],
+                                                           IdentTy(Ident::from_builtin_slice("Int")))]));
+                                                                      
         Scope{
             env: OwnedEnv(Environment{
-                type_vars: HashMap::new(),
+                type_vars: type_vars,
                 data_vars: HashMap::new(),
                 counter: 0,
             }),
@@ -444,6 +451,21 @@ mod tests {
                                                             vec![LiteralExpr(IntLit(5))])))])))
             ];
         
+        debug!("{}", infer_prgm(stmts));
+    }
+    
+    #[test]
+    fn fail() {
+        let stmts = vec![
+            LetStmt(Ident::from_user_slice("something"),
+                    FnExpr(vec![Ident::from_user_slice("x")],
+                           box CallExpr(FnCall(box IdentExpr(Ident::from_user_slice("x")),
+                                                        vec![LiteralExpr(IntLit(5))])))),
+            LetStmt(Ident::from_user_slice("y"),
+                    CallExpr(FnCall(box IdentExpr(Ident::from_user_slice("something")),
+                                    vec![LiteralExpr(IntLit(6))])))
+                ];
+
         debug!("{}", infer_prgm(stmts));
     }
 }
