@@ -3,7 +3,7 @@ use std::fmt;
 use lexer::{Token};
 use lexer::Token::{IDENT, LIT_INTEGER, LIT_FLOAT, LPAREN, RPAREN, COMMA};
 use ast::{Expr, Ident};
-use ast::Expr::{FnExpr, IntExpr, FloatExpr, IdentExpr};
+use ast::Expr::*;
 
 #[deriving(PartialEq, Eq, Clone)]
 pub struct Loc {
@@ -114,6 +114,23 @@ pub fn parse_expr<'a>(st: State<'a>) -> Parsed<'a, Expr> {
     )
 }
 
+pub fn parse_params<'a>(st: State<'a>) -> Parsed<'a, Vec<Expr>> {
+    let mut args = vec![];
+    let mut currst = st;
+    loop {
+        if let Ok((arg, st)) = parse_expr(currst) {
+            args.push(arg);
+            
+            match tokenp(|c: &Token| { match *c { COMMA => true, _ => false } }, st) {
+                Ok((_, st)) => { currst = st },
+                Err(_) => { return Ok((args, st)); }
+            }
+        } else {
+            return Ok((args, currst));
+        }
+    }
+}
+
 pub fn parse_args<'a>(st: State<'a>) -> Parsed<'a, Vec<Ident>> {
     let mut args: Vec<Ident> = vec![];
     let mut currst = st;
@@ -129,6 +146,15 @@ pub fn parse_args<'a>(st: State<'a>) -> Parsed<'a, Vec<Ident>> {
             return Ok((args, currst));
         }
     }
+}
+
+pub fn parse_fn_call<'a>(st: State<'a>) -> Parsed<'a, Expr> {
+    let (callee, st) = try!(parse_expr(st));
+    let (_, st) = try!(token!(LPAREN, st));
+    let (params, st) = try!(parse_params(st));
+    let (_, st) = try!(token!(RPAREN, st));
+    
+    Ok((CallExpr(box callee, box params), st))
 }
 
 pub fn parse_fn<'a>(st: State<'a>) -> Parsed<'a, Expr> {

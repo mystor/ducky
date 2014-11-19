@@ -33,4 +33,5 @@ pub enum Expr {
     StrExpr(String),
     FloatExpr(f64),
     FnExpr(Vec<Ident>, Box<Expr>),
+    CallExpr(Box<Expr>, Box<Vec<Expr>>),
 }
