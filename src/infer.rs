@@ -2,6 +2,8 @@ use string_cache::Atom;
 use std::collections::{HashMap, HashSet};
 use il::*;
 
+use self::MaybeOwnedEnv::*;
+
 #[deriving(Show, Clone)]
 pub struct Environment {
     data_vars: HashMap<Ident, Ty>,

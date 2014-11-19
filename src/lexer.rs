@@ -1,4 +1,5 @@
 use string_cache::Atom;
+use self::Token::*;
 
 macro_rules! nom {
     ($stream:ident -> { $($patt:expr => $action:expr),+ }) => (

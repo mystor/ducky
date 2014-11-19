@@ -1,7 +1,9 @@
 use std::fmt;
 
-use lexer::{Token, IDENT, LIT_INTEGER, LIT_FLOAT, LPAREN, RPAREN, COMMA};
-use ast::{Expr, FnExpr, IntExpr, FloatExpr, Ident, IdentExpr};
+use lexer::{Token};
+use lexer::Token::{IDENT, LIT_INTEGER, LIT_FLOAT, LPAREN, RPAREN, COMMA};
+use ast::{Expr, Ident};
+use ast::Expr::{FnExpr, IntExpr, FloatExpr, IdentExpr};
 
 #[deriving(PartialEq, Eq, Clone)]
 pub struct Loc {

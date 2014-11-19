@@ -3,11 +3,6 @@ use string_cache::Atom;
 #[deriving(Show)]
 pub struct Ident(pub Atom);
 
-// f : A{ x: Int, y: Int, my_fn: (Int, Int) -> Int, magnitude: (self) -> Int }
-
-
-
-
 #[deriving(Show)]
 pub struct Attr(pub Ident, pub Type);
 

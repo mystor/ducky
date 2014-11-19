@@ -1,6 +1,17 @@
 use string_cache::Atom;
 use std::fmt;
 
+// We don't actually want to take advantage of namespacing :'(
+// TODO: We should probably not do this
+pub use self::Context::*;
+pub use self::TyProp::*;
+pub use self::Ty::*;
+pub use self::Literal::*;
+pub use self::Prop::*;
+pub use self::Call::*;
+pub use self::Expr::*;
+pub use self::Stmt::*;
+
 #[deriving(Show, PartialEq, Eq, Hash, Clone)]
 pub enum Context {
     Internal(uint),
