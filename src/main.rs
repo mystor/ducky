@@ -18,24 +18,22 @@ pub mod parser;
 pub mod parserc;
 
 fn main() {
-    println!("{}", parserc::ab(&parserc::State("ac", parserc::Pos{line:1, col:0})));
-    // Lex some input and show the tokens
-    println!("{}", lexer::lex(r#"
-type Obj = {};
-type Point = {x: int, y: int};
-
-fn magnitude(pt: Point) {
-  return sqrt(float(pt.x * pt.x + pt.y * pt.y));
-}
-
-let x = 20;
-let y = |x| { 20 };
+    let tokens = lexer::lex(r#"
+let magnitude = fn(pt) {
+  sqrt(pt.x * pt.x + pt.y * pt.y)
+};
 
 let z = {x: 10, y: 20};
 
-print(magnitude(z));
-"#));
-    if let Ok(otoks) = lexer::lex(r#"13"#) {
-        println!("{}", parser::literal(otoks.as_slice()));
+magnitude(z);
+"#);
+    match tokens {
+        Ok(rawtoks) => {
+            println!("{}", rawtoks);
+            println!("{}", parser::parse_program(&mut parser::State::new(rawtoks.as_slice())));
+        }
+        Err(err) => {
+            println!("Error lexing: {}", err);
+        }
     }
 }

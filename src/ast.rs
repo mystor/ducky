@@ -1,37 +1,48 @@
 use string_cache::Atom;
 
-#[deriving(Show)]
+#[deriving(Show, Clone)]
 pub struct Ident(pub Atom);
 
-#[deriving(Show)]
-pub struct Attr(pub Ident, pub Type);
-
-#[deriving(Show)]
-pub enum Type {
-    ObjectTy(Vec<Attr>),
-    IntTy,
-    FloatTy,
-    StringTy,
+impl Ident {
+    pub fn from_slice(s: &str) -> Ident {
+        Ident(Atom::from_slice(s))
+    }
 }
 
-#[deriving(Show)]
-pub enum Item {
-    TypeItem(Ident, Type),
-    StmtItem(Stmt),
+#[deriving(Show, Clone)]
+pub enum Literal {
+    Str(Atom),
+    Int(i64),
+    Float(f64),
+    Bool(bool),
 }
 
-#[deriving(Show)]
-pub enum Stmt {
-    DeclStmt(Ident, Expr),
-    ExprStmt(Expr),
+#[deriving(Show, Clone)]
+pub enum Prop {
+    Val(Ident, Expr),
+    Method(Ident, Vec<Ident>, Expr),
 }
 
-#[deriving(Show)]
+#[deriving(Show, Clone)]
+pub enum Call {
+    Fn(Box<Expr>, Vec<Expr>),
+    Method(Box<Expr>, Ident, Vec<Expr>),
+}
+
+#[deriving(Show, Clone)]
 pub enum Expr {
-    IdentExpr(Ident),
-    IntExpr(int),
-    StrExpr(String),
-    FloatExpr(f64),
-    FnExpr(Vec<Ident>, Box<Expr>),
-    CallExpr(Box<Expr>, Box<Vec<Expr>>),
+    Literal(Literal),
+    Ident(Ident),
+    Rec(Vec<Prop>),
+    Member(Box<Expr>, Ident),
+    Call(Call),
+    Fn(Vec<Ident>, Box<Expr>),
+    Block(Vec<Stmt>),
+}
+
+#[deriving(Show, Clone)]
+pub enum Stmt {
+    Let(Ident, Expr),
+    Expr(Expr),
+    Empty
 }

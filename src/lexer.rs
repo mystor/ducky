@@ -50,9 +50,15 @@ pub enum Token {
     RARROW,
     LARROW,
     FAT_ARROW,
+    
+    // Keywords
+    FN,
+    LET,
+    TRUE,
+    FALSE,
 
     // Literals
-    LIT_INTEGER(int),
+    LIT_INTEGER(i64),
     LIT_FLOAT(f64),
     LIT_STR(Atom),
 
@@ -111,10 +117,18 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
             r"^=>" => |_| { FAT_ARROW },
 
             // The interesting ones
-            r"^[a-zA-Z_][a-zA-Z0-9_]*" => |v:&str| { IDENT(Atom::from_slice(v)) },
-            r#"^"([^"]|\\")""# => |v:&str| { LIT_STR(Atom::from_slice(v)) }, // TODO: Better string parsing
-            r"^[0-9]*\.[0-9]+" => |v:&str| { LIT_FLOAT(from_str(v).unwrap()) },
-            r"^[0-9]+" => |v:&str| { LIT_INTEGER(from_str(v).unwrap()) }
+            r"^[a-zA-Z_][a-zA-Z0-9_]*" => |v: &str| {
+                match v {
+                    "fn" => FN,
+                    "let" => LET,
+                    "true" => TRUE,
+                    "false" => FALSE,
+                    _ => IDENT(Atom::from_slice(v)),
+                }
+            },
+            r#"^"([^"]|\\")""# => |v: &str| { LIT_STR(Atom::from_slice(v)) }, // TODO: Better string parsing
+            r"^[0-9]*\.[0-9]+" => |v: &str| { LIT_FLOAT(from_str(v).unwrap()) },
+            r"^[0-9]+" => |v: &str| { LIT_INTEGER(from_str(v).unwrap()) }
         }) {
             toks.push(tok);
         } else {
