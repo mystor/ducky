@@ -1,5 +1,7 @@
 use string_cache::Atom;
 
+// TODO: Consider merging ast and il
+
 #[deriving(Show, Clone)]
 pub struct Ident(pub Atom);
 

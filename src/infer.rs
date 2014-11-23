@@ -26,7 +26,7 @@ impl Environment {
         self.data_vars.insert(id.clone(), ty.clone());
         ty
     }
-    
+
     // Creating a unique type variable
     fn introduce_type_var(&mut self) -> Ty {
         // TODO: Currently these names are awful
@@ -34,14 +34,14 @@ impl Environment {
         let id = chars.slice_chars(self.counter % chars.len(), self.counter % chars.len() + 1);
         self.counter += 1;
 
-        IdentTy(Ident(Atom::from_slice(id), Internal(self.counter)))
+        Ty::Ident(Ident(Atom::from_slice(id), Internal(self.counter)))
     }
-    
+
     // Perform a substitution (bind the type variable id)
     fn substitute(&mut self, id: Ident, ty: Ty) {
         self.type_vars.insert(id, ty);
     }
-    
+
 }
 
 // TODO: This can probably be merged into the Scope<'a> Struct
@@ -68,7 +68,7 @@ impl <'a> DerefMut<Environment> for MaybeOwnedEnv<'a> {
         }
     }
 }
-    
+
 #[deriving(Show)]
 pub struct Scope<'a> {
     env: MaybeOwnedEnv<'a>,
@@ -80,10 +80,10 @@ impl <'a>Scope<'a> {
         // Type Variables
         let mut type_vars = HashMap::new();
         type_vars.insert(Ident::from_builtin_slice("Int"),
-                         RecTy(box None, vec![MethodTyProp(Symbol::from_slice("+"),
-                                                           vec![IdentTy(Ident::from_builtin_slice("Int"))],
-                                                           IdentTy(Ident::from_builtin_slice("Int")))]));
-                                                                      
+                         Ty::Rec(box None, vec![TyProp::Method(Symbol::from_slice("+"),
+                                                               vec![Ty::Ident(Ident::from_builtin_slice("Int"))],
+                                                               Ty::Ident(Ident::from_builtin_slice("Int")))]));
+
         Scope{
             env: OwnedEnv(Environment{
                 type_vars: type_vars,
@@ -100,14 +100,14 @@ impl <'a>Scope<'a> {
                               .chain(bound_type_vars.into_iter()).collect())
         }
     }
-    
+
     fn is_bound_type_var(&self, id: &Ident) -> bool {
         self.bound_type_vars.contains(id) || self.lookup_type_var(id).is_some()
     }
-    
+
     fn instantiate(&mut self, ty: &Ty, mappings: &mut HashMap<Ident, Ty>) -> Ty {
         match *ty {
-            IdentTy(ref id) => {
+            Ty::Ident(ref id) => {
                 if self.is_bound_type_var(id) {
                     ty.clone()
                 } else {
@@ -121,33 +121,33 @@ impl <'a>Scope<'a> {
                     })
                 }
             }
-            RecTy(ref extends, ref props) => {
+            Ty::Rec(ref extends, ref props) => {
                 // Instantiate all of the properties!
                 let extends = match *extends { // @TODO: Why can't I .map()?
                     box Some(ref extends) => Some(self.instantiate(extends, mappings)),
                     box None => None,
                 };
-                
+
                 let props = props.iter().map(|prop| {
                     match *prop {
-                        ValTyProp(ref symb, ref ty) => {
-                            ValTyProp(symb.clone(), self.instantiate(ty, mappings))
+                        TyProp::Val(ref symb, ref ty) => {
+                            TyProp::Val(symb.clone(), self.instantiate(ty, mappings))
                         }
-                        MethodTyProp(ref symb, ref args, ref res) => {
+                        TyProp::Method(ref symb, ref args, ref res) => {
                             let nargs = args.iter().map(|x| {
                                 self.instantiate(x, mappings)
                             }).collect();
                             let nres = self.instantiate(res, mappings);
-                            MethodTyProp(symb.clone(), nargs, nres)
+                            TyProp::Method(symb.clone(), nargs, nres)
                         }
                     }
                 }).collect();
 
-                RecTy(box extends, props)
+                Ty::Rec(box extends, props)
             }
-            FnTy(ref args, ref res) => {
+            Ty::Fn(ref args, ref res) => {
                 let nargs = args.iter().map(|x| { self.instantiate(x, mappings) }).collect();
-                FnTy(nargs, box self.instantiate(&**res, mappings))
+                Ty::Fn(nargs, box self.instantiate(&**res, mappings))
             }
         }
     }
@@ -167,14 +167,14 @@ impl <'a> Deref<Environment> for Scope<'a> {
 
 fn unify_props(scope: &mut Scope, a: &TyProp, b: &TyProp) -> Result<(), String> {
     match (a, b) {
-        (&ValTyProp(_, ref aty), &ValTyProp(_, ref bty)) => {
+        (&TyProp::Val(_, ref aty), &TyProp::Val(_, ref bty)) => {
             unify(scope, aty, bty)
         }
-        (&MethodTyProp(_, ref aargs, ref ares), &MethodTyProp(_, ref bargs, ref bres)) => {
+        (&TyProp::Method(_, ref aargs, ref ares), &TyProp::Method(_, ref bargs, ref bres)) => {
             if aargs.len() != bargs.len() {
                 return Err(format!("Cannot unify {} and {}", a, b));
             }
-            
+
             // Unify each of the arguments
             for (aarg, barg) in aargs.iter().zip(bargs.iter()) {
                 try!(unify(scope, aarg, barg));
@@ -191,12 +191,12 @@ fn unify_props(scope: &mut Scope, a: &TyProp, b: &TyProp) -> Result<(), String> 
 pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
     // Generate a set of substitutions such that a == b in scope
     match (a, b) {
-        (&IdentTy(ref a), b) => {
+        (&Ty::Ident(ref a), b) => {
             // Check if we can abort early due to a recursive decl
-            if let IdentTy(ref b) = *b {
+            if let Ty::Ident(ref b) = *b {
                 if b == a { return Ok(()) }
-            } 
-            
+            }
+
             if let Some(ref ty) = scope.lookup_type_var(a) {
                 // The type name is explicit, resolve it
                 unify(scope, ty, b)
@@ -206,7 +206,7 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
                 Ok(())
             }
         }
-        (a, &IdentTy(ref b)) => {
+        (a, &Ty::Ident(ref b)) => {
             // TODO: Check if I should do this
             if let Some(ref ty) = scope.lookup_type_var(b) {
                 unify(scope, ty, a)
@@ -215,22 +215,22 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
                 Ok(())
             }
         }
-        (&FnTy(ref aargs, ref ares), &FnTy(ref bargs, ref bres)) => {
+        (&Ty::Fn(ref aargs, ref ares), &Ty::Fn(ref bargs, ref bres)) => {
             // Argument lists must have the same length for functions to unify
             // This is usually handled by currying which may exist in this language later
             if aargs.len() != bargs.len() {
                 return Err(format!("Cannot unify {} and {}", a, b));
             }
-            
+
             // Unify each of the arguments
             for (aarg, barg) in aargs.iter().zip(bargs.iter()) {
                 try!(unify(scope, aarg, barg));
             }
-            
+
             // Unify the results
             unify(scope, &**ares, &**bres)
         }
-        (&RecTy(ref aextends, ref aprops), &RecTy(ref bextends, ref bprops)) => {
+        (&Ty::Rec(ref aextends, ref aprops), &Ty::Rec(ref bextends, ref bprops)) => {
             // Find the intersection between aprops and bprops
             let mut only_a = HashMap::new();
             let mut only_b = HashMap::new();
@@ -243,43 +243,43 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
                     only_a.insert(aprop.symbol().clone(), aprop);
                 }
             }
-            
+
             for bprop in bprops.iter() {
                 if ! joint.contains_key(bprop.symbol()) {
                     only_b.insert(bprop.symbol().clone(), bprop);
                 }
             }
-            
+
             // Unify all of the common properties
             for &(aprop, bprop) in joint.values() {
                 try!(unify_props(scope, aprop, bprop));
             }
-            
+
             // Merge the remaining values into the other maps
             // @TODO: I have a sneaking suspicion that this is fundamentally incorrect...
             if ! only_a.is_empty() {
                 if let box Some(ref ty) = *bextends {
-                    try!(unify(scope, 
-                               &RecTy(aextends.clone(),
-                                      only_a.values().map(|x| x.clone().clone()).collect()),
+                    try!(unify(scope,
+                               &Ty::Rec(aextends.clone(),
+                                        only_a.values().map(|x| x.clone().clone()).collect()),
                                ty));
                 } else {
                     // @TODO: This error message is awful
                     return Err(format!("Cannot unify {} and {}", a, b));
                 }
             }
-            
+
             if ! only_b.is_empty() {
                 if let box Some(ref ty) = *aextends {
                     try!(unify(scope, ty,
-                               &RecTy(bextends.clone(),
-                                      only_b.values().map(|x| x.clone().clone()).collect())));
+                               &Ty::Rec(bextends.clone(),
+                                        only_b.values().map(|x| x.clone().clone()).collect())));
                 } else {
                     // @TODO: This error message is awful
                     return Err(format!("Cannot unify {} and {}", a, b));
                 }
             }
-            
+
             Ok(())
         }
         _ => {
@@ -294,7 +294,7 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
 fn infer_body(scope: &mut Scope, params: &Vec<Ident>, body: &Expr) -> Result<Ty, String> {
     let bound = { // Determine the list of variables which should be bound
         let transform = |x| {
-            if let IdentTy(id) = scope.lookup_data_var(x) {
+            if let Ty::Ident(id) = scope.lookup_data_var(x) {
                 id
             } else { unreachable!() }
         };
@@ -307,12 +307,12 @@ fn infer_body(scope: &mut Scope, params: &Vec<Ident>, body: &Expr) -> Result<Ty,
 
 pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
     match *e {
-        LiteralExpr(ref lit) => { Ok(lit.ty()) } // We probably can just inline that
-        IdentExpr(ref ident) => {
+        Expr::Literal(ref lit) => { Ok(lit.ty()) } // We probably can just inline that
+        Expr::Ident(ref ident) => {
             let uninst = scope.lookup_data_var(ident);
             Ok(scope.instantiate(&uninst, &mut HashMap::new()))
         }
-        CallExpr(FnCall(ref callee, ref params)) => {
+        Expr::Call(Call::Fn(ref callee, ref params)) => {
             let callee_ty = try!(infer_expr(scope, &**callee));
             let mut param_tys = Vec::with_capacity(params.len());
             for param in params.iter() {
@@ -323,10 +323,10 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
             }
             let beta = scope.introduce_type_var();
             // TODO: Vastly improve this error message
-            try!(unify(scope, &callee_ty, &FnTy(param_tys, box beta.clone())));
+            try!(unify(scope, &callee_ty, &Ty::Fn(param_tys, box beta.clone())));
             Ok(beta)
         }
-        CallExpr(MethodCall(ref obj, ref symb, ref params)) => {
+        Expr::Call(Call::Method(ref obj, ref symb, ref params)) => {
             let obj_ty = try!(infer_expr(scope, &**obj));
 
             let mut param_tys = Vec::with_capacity(params.len());
@@ -336,34 +336,34 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
                     Err(err) => { return Err(err); }
                 }
             }
-            
+
             let res = scope.introduce_type_var();
             // The object must have the method with the correct type. UNIFY!
-            let require_ty = RecTy(box Some(scope.introduce_type_var()),
-                                   vec![MethodTyProp(symb.clone(), param_tys, res.clone())]);
+            let require_ty = Ty::Rec(box Some(scope.introduce_type_var()),
+                                     vec![TyProp::Method(symb.clone(), param_tys, res.clone())]);
             try!(unify(scope, &obj_ty, &require_ty));
             Ok(res)
         }
-        FnExpr(ref params, ref body) => {
+        Expr::Fn(ref params, ref body) => {
             let body_ty = try!(infer_body(scope, params, &**body));
             let mut param_tys = Vec::with_capacity(params.len());
             for param in params.iter() {
                 param_tys.push(scope.lookup_data_var(param));
             }
-            Ok(FnTy(param_tys, box body_ty))
+            Ok(Ty::Fn(param_tys, box body_ty))
         }
-        RecExpr(ref props) => {
+        Expr::Rec(ref props) => {
             let self_type = scope.introduce_type_var();
 
             let mut prop_tys = Vec::with_capacity(props.len());
 
             for prop in props.iter() {
                 match *prop {
-                    ValProp(ref symb, ref expr) => {
+                    Prop::Val(ref symb, ref expr) => {
                         prop_tys.push(
-                            ValTyProp(symb.clone(), try!(infer_expr(scope, expr))))
+                            TyProp::Val(symb.clone(), try!(infer_expr(scope, expr))))
                     }
-                    MethodProp(ref symb, ref params, ref body) => {
+                    Prop::Method(ref symb, ref params, ref body) => {
                         // Unify the first variable's type with self_type
                         // TODO: Do this at the end?
                         let first_type = scope.lookup_data_var(&params[0]);
@@ -375,21 +375,21 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
                             param_tys.push(scope.lookup_data_var(param));
                         }
                         prop_tys.push(
-                            MethodTyProp(symb.clone(), param_tys, body_ty))
+                            TyProp::Method(symb.clone(), param_tys, body_ty))
                     }
                 }
             }
-            
-            Ok(RecTy(box None, prop_tys))
+
+            Ok(Ty::Rec(box None, prop_tys))
         }
-        BlockExpr(ref stmts) => {
+        Expr::Block(ref stmts) => {
             // Infer for each value but the last one
             for stmt in stmts.init().iter() {
                 try!(infer_stmt(scope, stmt));
             }
             // Run the last one
             match stmts.last() {
-                Some(&ExprStmt(ref expr)) => {
+                Some(&Stmt::Expr(ref expr)) => {
                     return infer_expr(scope, expr);
                 }
                 Some(stmt) => {
@@ -398,18 +398,18 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
                 None => {}
             }
             // If the last element isn't an Expression, the value is Null ({})
-            Ok(IdentTy(Ident(Atom::from_slice("Null"), BuiltIn)))
+            Ok(Ty::Ident(Ident(Atom::from_slice("Null"), BuiltIn)))
         }
     }
 }
 
 pub fn infer_stmt(scope: &mut Scope, stmt: &Stmt) -> Result<(), String> {
     match *stmt {
-        ExprStmt(ref expr) => {
+        Stmt::Expr(ref expr) => {
             try!(infer_expr(scope, expr));
             Ok(())
         }
-        LetStmt(ref ident, ref expr) => {
+        Stmt::Let(ref ident, ref expr) => {
             let ty = try!(infer_expr(scope, expr));
             // TODO: Better error message on failure
             let ident = scope.lookup_data_var(ident);
@@ -420,7 +420,7 @@ pub fn infer_stmt(scope: &mut Scope, stmt: &Stmt) -> Result<(), String> {
 
 pub fn infer_prgm(body: Vec<Stmt>) -> Result<Scope<'static>, String> {
     let mut scope = Scope::new();
-    try!(infer_expr(&mut scope, &BlockExpr(body)));
+    try!(infer_expr(&mut scope, &Expr::Block(body)));
     Ok(scope)
 }
 
@@ -432,40 +432,40 @@ mod tests {
     #[test]
     fn compose_id_with_itself() {
         let stmts = vec![
-            LetStmt(Ident::from_user_slice("id"),
-                    FnExpr(vec![Ident::from_user_slice("x")],
-                           box IdentExpr(Ident::from_user_slice("x")))),
-            LetStmt(Ident::from_user_slice("x"),
-                    CallExpr(FnCall(box IdentExpr(Ident::from_user_slice("id")),
-                                    vec![IdentExpr(Ident::from_user_slice("id"))])))];
-        
+            Stmt::Let(Ident::from_user_slice("id"),
+                      Expr::Fn(vec![Ident::from_user_slice("x")],
+                               box Expr::Ident(Ident::from_user_slice("x")))),
+            Stmt::Let(Ident::from_user_slice("x"),
+                      Expr::Call(Call::Fn(box Expr::Ident(Ident::from_user_slice("id")),
+                                          vec![Expr::Ident(Ident::from_user_slice("id"))])))];
+
         debug!("{}", infer_prgm(stmts));
     }
-    
+
     #[test]
     fn basic_method_call() {
         let stmts = vec![
-            LetStmt(Ident::from_user_slice("myfn"),
-                    FnExpr(vec![Ident::from_user_slice("x")],
-                           box BlockExpr(vec![
-                               ExprStmt(CallExpr(MethodCall(box IdentExpr(Ident::from_user_slice("x")),
-                                                            Symbol::from_slice("foo"),
-                                                            vec![LiteralExpr(IntLit(5))])))])))
-            ];
-        
+            Stmt::Let(Ident::from_user_slice("myfn"),
+                      Expr::Fn(vec![Ident::from_user_slice("x")],
+                               box Expr::Block(vec![
+                                   Stmt::Expr(Expr::Call(Call::Method(box Expr::Ident(Ident::from_user_slice("x")),
+                                                                      Symbol::from_slice("foo"),
+                                                                      vec![Expr::Literal(Literal::Int(5))])))])))
+                ];
+
         debug!("{}", infer_prgm(stmts));
     }
-    
+
     #[test]
     fn fail() {
         let stmts = vec![
-            LetStmt(Ident::from_user_slice("something"),
-                    FnExpr(vec![Ident::from_user_slice("x")],
-                           box CallExpr(FnCall(box IdentExpr(Ident::from_user_slice("x")),
-                                                        vec![LiteralExpr(IntLit(5))])))),
-            LetStmt(Ident::from_user_slice("y"),
-                    CallExpr(FnCall(box IdentExpr(Ident::from_user_slice("something")),
-                                    vec![LiteralExpr(IntLit(6))])))
+            Stmt::Let(Ident::from_user_slice("something"),
+                      Expr::Fn(vec![Ident::from_user_slice("x")],
+                               box Expr::Call(Call::Fn(box Expr::Ident(Ident::from_user_slice("x")),
+                                                       vec![Expr::Literal(Literal::Int(5))])))),
+            Stmt::Let(Ident::from_user_slice("y"),
+                      Expr::Call(Call::Fn(box Expr::Ident(Ident::from_user_slice("something")),
+                                          vec![Expr::Literal(Literal::Int(6))])))
                 ];
 
         debug!("{}", infer_prgm(stmts));
