@@ -344,6 +344,17 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
             try!(unify(scope, &obj_ty, &require_ty));
             Ok(res)
         }
+        Expr::Member(ref obj, ref symb) => {
+            let obj_ty = try!(infer_expr(scope, &**obj));
+
+            let ty = scope.introduce_type_var();
+
+            let require_ty = Ty::Rec(box Some(scope.introduce_type_var()),
+                                     vec![TyProp::Val(symb.clone(), ty.clone())]);
+            try!(unify(scope, &obj_ty, &require_ty));
+
+            Ok(ty)
+        }
         Expr::Fn(ref params, ref body) => {
             let body_ty = try!(infer_body(scope, params, &**body));
             let mut param_tys = Vec::with_capacity(params.len());
@@ -415,6 +426,7 @@ pub fn infer_stmt(scope: &mut Scope, stmt: &Stmt) -> Result<(), String> {
             let ident = scope.lookup_data_var(ident);
             unify(scope, &ident, &ty)
         }
+        Stmt::Empty => Ok(())
     }
 }
 

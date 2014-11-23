@@ -9,6 +9,7 @@ pub enum Context {
     Internal(uint),
     BuiltIn,
     User,
+    Unresolved, // Unresolved values have just been read in by the program
 }
 
 //| Identifiers are names used for type and data variables
@@ -16,6 +17,14 @@ pub enum Context {
 pub struct Ident(pub Atom, pub Context);
 
 impl Ident {
+    pub fn from_atom(atom: &Atom) -> Ident {
+        Ident(atom.clone(), Unresolved)
+    }
+
+    pub fn from_slice(s: &str) -> Ident {
+        Ident(Atom::from_slice(s), Unresolved)
+    }
+
     pub fn from_user_slice(s: &str) -> Ident {
         Ident(Atom::from_slice(s), User)
     }
@@ -30,13 +39,16 @@ impl fmt::Show for Ident {
         let Ident(ref atom, ref context) = *self;
         match *context {
             User => {
-                write!(f, "{}", atom.as_slice())
+                write!(f, "0~{}", atom.as_slice())
             }
             BuiltIn => {
                 write!(f, "::{}", atom.as_slice())
             }
             Internal(i) => {
                 write!(f, "{}::{}", i, atom.as_slice())
+            }
+            Unresolved => {
+                write!(f, "{}", atom.as_slice())
             }
         }
     }
@@ -47,6 +59,10 @@ impl fmt::Show for Ident {
 pub struct Symbol(pub Atom);
 
 impl Symbol {
+    pub fn from_atom(atom: &Atom) -> Symbol {
+        Symbol(atom.clone())
+    }
+
     pub fn from_slice(s: &str) -> Symbol {
         Symbol(Atom::from_slice(s))
     }
@@ -145,6 +161,7 @@ pub enum Literal {
     Str(Atom),
     Int(i64),
     Float(f64),
+    Bool(bool),
 }
 
 impl Literal {
@@ -153,6 +170,7 @@ impl Literal {
             Literal::Str(_) => Ident(Atom::from_slice("Str"), BuiltIn),
             Literal::Int(_) => Ident(Atom::from_slice("Int"), BuiltIn),
             Literal::Float(_) => Ident(Atom::from_slice("Float"), BuiltIn),
+            Literal::Bool(_) => Ident(Atom::from_slice("Bool"), BuiltIn),
         })
     }
 }
@@ -174,6 +192,7 @@ pub enum Expr {
     Literal(Literal),
     Ident(Ident),
     Rec(Vec<Prop>),
+    Member(Box<Expr>, Symbol),
     Call(Call),
     Fn(Vec<Ident>, Box<Expr>),
     Block(Vec<Stmt>),
@@ -183,4 +202,5 @@ pub enum Expr {
 pub enum Stmt {
     Let(Ident, Expr),
     Expr(Expr),
+    Empty,
 }

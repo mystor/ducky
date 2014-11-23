@@ -1,6 +1,6 @@
 use lexer::{Token};
 use lexer::Token::*;
-use ast::{Expr, Call, Prop, Ident, Literal, Stmt};
+use il::{Expr, Call, Prop, Ident, Symbol, Literal, Stmt};
 
 // TODO: Desugaring shouldn't happen inline!
 
@@ -55,7 +55,7 @@ pub fn parse_stmt<'a>(st: &mut State<'a>) -> Result<Stmt, String> {
             expect!(st ~ IDENT(ref ident) => {
                 expect!(st ~ EQ => {
                     let expr = try!(parse_expr(st));
-                    Ok(Stmt::Let(Ident(ident.clone()), expr))
+                    Ok(Stmt::Let(Ident::from_atom(ident), expr))
                 })
             })
         },
@@ -76,7 +76,7 @@ pub fn parse_expr<'a>(st: &mut State<'a>) -> Result<Expr, String> {
 
 /// Infix expressions are just method calls on the lhs argument
 fn mk_infix(op: &str, lhs: Expr, rhs: Expr) -> Expr {
-    Expr::Call(Call::Method(box lhs, Ident::from_slice(op), vec![rhs]))
+    Expr::Call(Call::Method(box lhs, Symbol::from_slice(op), vec![rhs]))
 }
 
 /// Infix operators + and -
@@ -128,7 +128,7 @@ fn parse_tdm<'a>(st: &mut State<'a>) -> Result<Expr, String> {
 /// Unary prefix operators
 fn parse_unary<'a>(st: &mut State<'a>) -> Result<Expr, String> {
     fn mk_unary(op: &str, arg: Expr) -> Expr {
-        Expr::Call(Call::Method(box arg, Ident::from_slice(op), vec![])) 
+        Expr::Call(Call::Method(box arg, Symbol::from_slice(op), vec![])) 
     }
 
     match st.peek() {
@@ -154,7 +154,7 @@ fn parse_deref<'a>(st: &mut State<'a>) -> Result<Expr, String> {
             Some(&DOT) => {
                 st.eat();
                 expect!(st ~ IDENT(ref ident) => {
-                    lhs = Expr::Member(box lhs, Ident(ident.clone()));
+                    lhs = Expr::Member(box lhs, Symbol::from_atom(ident));
                 })
             }
             Some(&COLON) => {
@@ -163,7 +163,7 @@ fn parse_deref<'a>(st: &mut State<'a>) -> Result<Expr, String> {
                     expect!(st ~ LPAREN);
                     let args = try!(parse_args(st));
                     expect!(st ~ RPAREN);
-                    lhs = Expr::Call(Call::Method(box lhs, Ident(ident.clone()), args));
+                    lhs = Expr::Call(Call::Method(box lhs, Symbol::from_atom(ident), args));
                 })
             }
             Some(&LPAREN) => {
@@ -210,7 +210,7 @@ fn parse_params<'a>(st: &mut State<'a>) -> Result<Vec<Ident>, String> {
     loop {
         if let Some(&IDENT(ref ident)) = st.peek() {
             st.eat();
-            params.push(Ident(ident.clone()));
+            params.push(Ident::from_atom(ident));
             match st.peek() {
                 Some(&COMMA) => st.eat(),
                 _ => break
@@ -244,7 +244,7 @@ fn parse_value<'a>(st: &mut State<'a>) -> Result<Expr, String> {
         // Trivial Cases
         Some(&IDENT(ref ident)) => {
             st.eat();
-            Ok(Expr::Ident(Ident(ident.clone())))
+            Ok(Expr::Ident(Ident::from_atom(ident)))
         }
         Some(&LIT_INTEGER(i)) => {
             st.eat();
@@ -290,7 +290,7 @@ fn parse_props<'a>(st: &mut State<'a>) -> Result<Vec<Prop>, String> {
                     expect!(st ~ RPAREN);
                     let body = try!(parse_block_expr(st));
 
-                    props.push(Prop::Method(Ident(ident.clone()), params, body));
+                    props.push(Prop::Method(Symbol::from_atom(ident), params, body));
                 })
             },
             Some(&IDENT(ref ident)) => {
@@ -298,7 +298,7 @@ fn parse_props<'a>(st: &mut State<'a>) -> Result<Vec<Prop>, String> {
                 expect!(st ~ COLON);
                 let value = try!(parse_expr(st));
 
-                props.push(Prop::Val(Ident(ident.clone()), value));
+                props.push(Prop::Val(Symbol::from_atom(ident), value));
             }
             _ => break
         };

@@ -10,11 +10,10 @@ extern crate log;
 
 extern crate string_cache;
 
-pub mod il;
-pub mod infer;
-pub mod ast;
 pub mod lexer;
 pub mod parser;
+pub mod il;
+pub mod infer;
 
 fn main() {
     let tokens = lexer::lex(r#"

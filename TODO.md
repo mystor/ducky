@@ -2,8 +2,9 @@
 
 ## Parsing
 - [x] Working Lexer
-- [ ] Working Parser
-- [ ] AST -> Ducky IR converter
+- [x] Working Parser
+- [x] AST -> Ducky IR converter (ast == ir now - probably temporary)
+- [ ] User Annotated Types
 - [ ] Concrete syntax design
 
 ## Type Inference
