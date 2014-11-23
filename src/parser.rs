@@ -22,6 +22,10 @@ macro_rules! expect {
     }
 }
 
+/// The State struct contains the current parsing state for the parser
+/// It acts as a source of tokens for the parser to use.
+///
+/// TODO: This should probably be in a tokens module/the lexer module
 pub struct State<'a> {
     tokens: &'a [Token],
     // TODO: Spans etc.
@@ -151,6 +155,15 @@ fn parse_deref<'a>(st: &mut State<'a>) -> Result<Expr, String> {
                 st.eat();
                 expect!(st ~ IDENT(ref ident) => {
                     lhs = Expr::Member(box lhs, Ident(ident.clone()));
+                })
+            }
+            Some(&COLON) => {
+                st.eat();
+                expect!(st ~ IDENT(ref ident) => {
+                    expect!(st ~ LPAREN);
+                    let args = try!(parse_args(st));
+                    expect!(st ~ RPAREN);
+                    lhs = Expr::Call(Call::Method(box lhs, Ident(ident.clone()), args));
                 })
             }
             Some(&LPAREN) => {
@@ -314,4 +327,3 @@ pub fn parse_program<'a>(st: &mut State<'a>) -> Result<Vec<Stmt>, String> {
     // Right now programs are just lists of statements
     parse_stmts(st)
 }
-
