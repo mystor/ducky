@@ -45,7 +45,11 @@ impl fmt::Show for Ident {
                 write!(f, "::{}", atom.as_slice())
             }
             Internal(i) => {
-                write!(f, "{}::{}", i, atom.as_slice())
+                if i < 52 {
+                    write!(f, "_{}", atom.as_slice())
+                } else {
+                    write!(f, "{}::{}", i, atom.as_slice())
+                }
             }
             Unresolved => {
                 write!(f, "{}", atom.as_slice())
@@ -75,7 +79,7 @@ impl fmt::Show for Symbol {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, PartialEq, Eq, Hash)]
 pub enum TyProp {
     Val(Symbol, Ty),
     Method(Symbol, Vec<Ty>, Ty),
@@ -99,7 +103,7 @@ impl fmt::Show for TyProp {
             TyProp::Method(ref symbol, ref args, ref res) => {
                 // @TODO: This is terrible syntax, but must differentiate
                 // from ValTyProp
-                try!(write!(f, "{}(", symbol));
+                try!(write!(f, "fn {}(", symbol));
                 for arg in args.iter() {
                     try!(write!(f, "{}", arg));
                 }
@@ -109,7 +113,7 @@ impl fmt::Show for TyProp {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, PartialEq, Eq, Hash)]
 pub enum Ty {
     Ident(Ident),
     Rec(Box<Option<Ty>>, Vec<TyProp>),
@@ -133,19 +137,19 @@ impl fmt::Show for Ty {
                 if let Some(ref ty) = *maybe_ty {
                     try!(write!(f, "{}:{} ", ty, "{"));
                     for prop in props.iter() {
-                        try!(write!(f, "{}", prop));
+                        try!(write!(f, "{}, ", prop));
                     }
-                    write!(f, " {}", "}")
+                    write!(f, "{}", "}")
                 } else {
                     try!(write!(f, "{} ", "{"));
                     for prop in props.iter() {
-                        try!(write!(f, "{}", prop));
+                        try!(write!(f, "{}, ", prop));
                     }
-                    write!(f, " {}", "}")
+                    write!(f, "{}", "}")
                 }
             }
             Ty::Fn(ref args, box ref res) => {
-                try!(write!(f, "("));
+                try!(write!(f, "fn ("));
                 for arg in args.iter() {
                     try!(write!(f, "{}", arg));
                 }

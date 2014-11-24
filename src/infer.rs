@@ -1,13 +1,38 @@
 use string_cache::Atom;
+use std::fmt;
 use std::collections::{HashMap, HashSet};
 use il::*;
 
 use self::MaybeOwnedEnv::*;
 
+#[deriving(Clone)]
+pub struct InferValue {
+    data_vars: HashMap<Ident, Ty>,
+    type_vars: HashMap<Ident, Ty>,
+}
+
+impl fmt::Show for InferValue {
+    fn fmt<'a>(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        try!(write!(f, "{{\n"));
+        try!(write!(f, "  data_vars: {{\n"));
+        for (id, ty) in self.data_vars.iter() {
+            try!(write!(f, "    {:10}: {}\n", format!("{}", id), ty));
+        }
+        try!(write!(f, "  }}\n"));
+        try!(write!(f, "  type_vars: {{\n"));
+        for (id, ty) in self.type_vars.iter() {
+            try!(write!(f, "    {:10}: {}\n", format!("{}", id), ty));
+        }
+        try!(write!(f, "  }}\n"));
+        write!(f, "}}")
+    }
+}
+
 #[deriving(Show, Clone)]
 pub struct Environment {
     data_vars: HashMap<Ident, Ty>,
     type_vars: HashMap<Ident, Ty>,
+    unified: HashSet<(Ty, Ty)>,
     counter: uint,
 }
 
@@ -30,10 +55,10 @@ impl Environment {
     // Creating a unique type variable
     fn introduce_type_var(&mut self) -> Ty {
         // TODO: Currently these names are awful
-        let chars = "αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨω";
+        let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
         let id = chars.slice_chars(self.counter % chars.len(), self.counter % chars.len() + 1);
         self.counter += 1;
-
+        
         Ty::Ident(Ident(Atom::from_slice(id), Internal(self.counter)))
     }
 
@@ -41,7 +66,14 @@ impl Environment {
     fn substitute(&mut self, id: Ident, ty: Ty) {
         self.type_vars.insert(id, ty);
     }
-
+    
+    // Produce an InferValue
+    fn as_infervalue(&self) -> InferValue {
+        InferValue {
+            data_vars: self.data_vars.clone(),
+            type_vars: self.type_vars.clone(),
+        }
+    }
 }
 
 // TODO: This can probably be merged into the Scope<'a> Struct
@@ -82,12 +114,16 @@ impl <'a>Scope<'a> {
         type_vars.insert(Ident::from_builtin_slice("Int"),
                          Ty::Rec(box None, vec![TyProp::Method(Symbol::from_slice("+"),
                                                                vec![Ty::Ident(Ident::from_builtin_slice("Int"))],
+                                                               Ty::Ident(Ident::from_builtin_slice("Int"))),
+                                                TyProp::Method(Symbol::from_slice("*"),
+                                                               vec![Ty::Ident(Ident::from_builtin_slice("Int"))],
                                                                Ty::Ident(Ident::from_builtin_slice("Int")))]));
 
         Scope{
             env: OwnedEnv(Environment{
                 type_vars: type_vars,
                 data_vars: HashMap::new(),
+                unified: HashSet::new(),
                 counter: 0,
             }),
             bound_type_vars: HashSet::new(),
@@ -189,12 +225,34 @@ fn unify_props(scope: &mut Scope, a: &TyProp, b: &TyProp) -> Result<(), String> 
 }
 
 pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
+    debug!("Unifying {} <=> {}", a, b);
+    debug!("Environment: {}", "{");
+    for (key, value) in scope.type_vars.iter() {
+        debug!("  {}: {}", key, value);
+    }
+    debug!("{}", "}");
+
+    // Record the previously unified values in the scope, and abort with Ok(()) if they have been unified before
+    let ty_pairs = (a.clone(), b.clone());
+    if scope.unified.contains(&(a.clone(), b.clone())) {
+        return Ok(());
+    } else {
+        scope.unified.insert(ty_pairs);
+    }
+
+    // println!("{}", scope.type_vars);
     // Generate a set of substitutions such that a == b in scope
-    match (a, b) {
+    let res = match (a, b) {
         (&Ty::Ident(ref a), b) => {
             // Check if we can abort early due to a recursive decl
             if let Ty::Ident(ref b) = *b {
                 if b == a { return Ok(()) }
+
+                // If both are identifiers, and the second is unbound, substitute!
+                if let None = scope.lookup_type_var(b) {
+                    scope.substitute(b.clone(), Ty::Ident(a.clone()));
+                    return Ok(());
+                }
             }
 
             if let Some(ref ty) = scope.lookup_type_var(a) {
@@ -230,21 +288,69 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
             // Unify the results
             unify(scope, &**ares, &**bres)
         }
-        (&Ty::Rec(ref aextends, ref aprops), &Ty::Rec(ref bextends, ref bprops)) => {
+        (&Ty::Rec(box ref _aextends, ref _aprops), &Ty::Rec(box ref _bextends, ref _bprops)) => {
+            let mut aextends = _aextends.clone();
+            let mut aprops = HashMap::new();
+            let mut bextends = _bextends.clone();
+            let mut bprops = HashMap::new();
+            
+            for aprop in _aprops.iter() {
+                aprops.insert(aprop.symbol().clone(), aprop.clone());
+            }
+            
+            for bprop in _bprops.iter() {
+                bprops.insert(bprop.symbol().clone(), bprop.clone());
+            }
+            
+            fn expand_extends<'a>(scope: &mut Scope<'a>, extends: &mut Option<Ty>, props: &mut HashMap<Symbol, TyProp>) {
+                loop {
+                    let mut new_extends;
+                    
+                    match *extends {
+                        Some(Ty::Ident(ref ident)) => {
+                            // We are extending an identifier, let's expand it!
+                            if let Some(ty) = scope.lookup_type_var(ident) {
+                                new_extends = Some(ty);
+                            } else {
+                                // We are looking at a wildcard! woo!
+                                break;
+                            }
+                        }
+                        Some(Ty::Rec(box ref nextends, ref nprops)) => {
+                            // We are extending a record, merge it in!
+                            for prop in nprops.iter() {
+                                assert!(props.insert(prop.symbol().clone(), prop.clone()).is_none());
+                            }
+                            new_extends = nextends.clone()
+                        }
+                        None => {
+                            // We have reached a concrete type!
+                            break;
+                        }
+                        Some(_) => panic!("You can't extend a function?!? what?"), // @TODO: Improve
+                    }
+                    
+                    *extends = new_extends;
+                }
+            }
+            
+            expand_extends(scope, &mut aextends, &mut aprops);
+            expand_extends(scope, &mut bextends, &mut bprops);
+            
             // Find the intersection between aprops and bprops
             let mut only_a = HashMap::new();
             let mut only_b = HashMap::new();
             let mut joint  = HashMap::new();
 
-            for aprop in aprops.iter() {
-                if let Some(bprop) = bprops.iter().find(|bprop| { aprop.symbol() == bprop.symbol() }) {
+            for aprop in aprops.values() {
+                if let Some(bprop) = bprops.values().find(|bprop| { aprop.symbol() == bprop.symbol() }) {
                     joint.insert(aprop.symbol().clone(), (aprop, bprop));
                 } else {
                     only_a.insert(aprop.symbol().clone(), aprop);
                 }
             }
 
-            for bprop in bprops.iter() {
+            for bprop in bprops.values() {
                 if ! joint.contains_key(bprop.symbol()) {
                     only_b.insert(bprop.symbol().clone(), bprop);
                 }
@@ -254,31 +360,39 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
             for &(aprop, bprop) in joint.values() {
                 try!(unify_props(scope, aprop, bprop));
             }
+            
+            let common_free = scope.introduce_type_var();
 
             // Merge the remaining values into the other maps
-            // @TODO: I have a sneaking suspicion that this is fundamentally incorrect...
-            if ! only_a.is_empty() {
-                if let box Some(ref ty) = *bextends {
-                    try!(unify(scope,
-                               &Ty::Rec(aextends.clone(),
-                                        only_a.values().map(|x| x.clone().clone()).collect()),
-                               ty));
-                } else {
-                    // @TODO: This error message is awful
-                    return Err(format!("Cannot unify {} and {}", a, b));
-                }
+            if let Some(Ty::Ident(ref ident)) = bextends {
+                // We need to unify bextends with something
+                scope.substitute(ident.clone(),
+                                 Ty::Rec(box Some(common_free.clone()),
+                                         only_a.values().map(|x| (**x).clone()).collect()));
+            } else if ! only_a.is_empty() {
+                return Err(format!("Cannot unify {} and {}", a, b));
             }
 
-            if ! only_b.is_empty() {
-                if let box Some(ref ty) = *aextends {
-                    try!(unify(scope, ty,
-                               &Ty::Rec(bextends.clone(),
-                                        only_b.values().map(|x| x.clone().clone()).collect())));
-                } else {
-                    // @TODO: This error message is awful
-                    return Err(format!("Cannot unify {} and {}", a, b));
-                }
+            // Merge the remaining values into the other maps
+            if let Some(Ty::Ident(ref ident)) = aextends {
+                // We need to unify bextends with something
+                scope.substitute(ident.clone(),
+                                 Ty::Rec(box Some(common_free.clone()),
+                                         only_b.values().map(|x| (**x).clone()).collect()));
+            } else if ! only_b.is_empty() {
+                return Err(format!("Cannot unify {} and {}", a, b));
             }
+
+            // if ! only_b.is_empty() {
+            //     if let Some(Ty::Ident(ref ident)) = aextends {
+            //         scope.substitute(ident.clone(),
+            //                          Ty::Rec(box bextends.clone(),
+            //                                  only_b.values().map(|x| (**x).clone()).collect()));
+            //     } else {
+            //         // @TODO: This error message is awful
+            //         return Err(format!("Cannot unify {} and {}", a, b));
+            //     }
+            // }
 
             Ok(())
         }
@@ -288,7 +402,9 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
             // unify() is called.
             Err(format!("Cannot unify {} and {}", a, b))
         }
-    }
+    };
+    debug!("Successfully Unified {} <=> {}", a, b);
+    return res;
 }
 
 fn infer_body(scope: &mut Scope, params: &Vec<Ident>, body: &Expr) -> Result<Ty, String> {
@@ -430,10 +546,10 @@ pub fn infer_stmt(scope: &mut Scope, stmt: &Stmt) -> Result<(), String> {
     }
 }
 
-pub fn infer_prgm(body: Vec<Stmt>) -> Result<Scope<'static>, String> {
+pub fn infer_program(body: Vec<Stmt>) -> Result<InferValue, String> {
     let mut scope = Scope::new();
     try!(infer_expr(&mut scope, &Expr::Block(body)));
-    Ok(scope)
+    Ok(scope.as_infervalue())
 }
 
 #[cfg(test)]
@@ -451,7 +567,7 @@ mod tests {
                       Expr::Call(Call::Fn(box Expr::Ident(Ident::from_user_slice("id")),
                                           vec![Expr::Ident(Ident::from_user_slice("id"))])))];
 
-        debug!("{}", infer_prgm(stmts));
+        debug!("{}", infer_program(stmts));
     }
 
     #[test]
@@ -465,7 +581,7 @@ mod tests {
                                                                       vec![Expr::Literal(Literal::Int(5))])))])))
                 ];
 
-        debug!("{}", infer_prgm(stmts));
+        debug!("{}", infer_program(stmts));
     }
 
     #[test]
@@ -480,6 +596,6 @@ mod tests {
                                           vec![Expr::Literal(Literal::Int(6))])))
                 ];
 
-        debug!("{}", infer_prgm(stmts));
+        debug!("{}", infer_program(stmts));
     }
 }

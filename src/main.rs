@@ -27,8 +27,16 @@ magnitude(z);
 "#);
     match tokens {
         Ok(rawtoks) => {
-            println!("{}", rawtoks);
-            println!("{}", parser::parse_program(&mut parser::State::new(rawtoks.as_slice())));
+            let ast = parser::parse_program(&mut parser::State::new(rawtoks.as_slice()));
+            match ast {
+                Ok(rawast) => {
+                    let inferred_types = infer::infer_program(rawast);
+                    println!("{}", inferred_types);
+                }
+                Err(err) => {
+                    println!("Error parsing: {}", err);
+                }
+            }
         }
         Err(err) => {
             println!("Error lexing: {}", err);
