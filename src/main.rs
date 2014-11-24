@@ -14,6 +14,7 @@ pub mod lexer;
 pub mod parser;
 pub mod il;
 pub mod infer;
+pub mod simplify;
 
 fn main() {
     let tokens = lexer::lex(r#"
@@ -31,7 +32,14 @@ magnitude(z);
             match ast {
                 Ok(rawast) => {
                     let inferred_types = infer::infer_program(rawast);
-                    println!("{}", inferred_types);
+                    match inferred_types {
+                        Ok(ref types) => {
+                            println!("{}", simplify::simplify(types));
+                        }
+                        Err(err) => {
+                            println!("Error inferring types: {}", err);
+                        }
+                    }
                 }
                 Err(err) => {
                     println!("Error parsing: {}", err);

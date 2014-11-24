@@ -7,8 +7,8 @@ use self::MaybeOwnedEnv::*;
 
 #[deriving(Clone)]
 pub struct InferValue {
-    data_vars: HashMap<Ident, Ty>,
-    type_vars: HashMap<Ident, Ty>,
+    pub data_vars: HashMap<Ident, Ty>,
+    pub type_vars: HashMap<Ident, Ty>,
 }
 
 impl fmt::Show for InferValue {
