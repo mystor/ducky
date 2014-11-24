@@ -137,24 +137,33 @@ impl <'a>Scope<'a> {
         }
     }
 
-    fn is_bound_type_var(&self, id: &Ident) -> bool {
-        self.bound_type_vars.contains(id) || self.lookup_type_var(id).is_some()
-    }
-
     fn instantiate(&mut self, ty: &Ty, mappings: &mut HashMap<Ident, Ty>) -> Ty {
         match *ty {
             Ty::Ident(ref id) => {
-                if self.is_bound_type_var(id) {
+                if let Some(ty) = mappings.get(id) {
+                    // Check if this identifier has already been looked up in the mappings
+                    return ty.clone()
+                }
+
+                if self.bound_type_vars.contains(id) {
+                    // Bound type vars are explicitly not initialized
                     ty.clone()
                 } else {
-                    // This is an unbound variable, look up the name we have given
-                    // it in the instance, or give it a new name
-                    let lookup = mappings.get(id).map(|x| { x.clone() });
-                    lookup.unwrap_or_else(|| {
-                        let ty_var = self.introduce_type_var();
-                        mappings.insert(id.clone(), ty_var.clone());
-                        ty_var
-                    })
+                    // Create a type var to represent the instantiated version
+                    let ty_var = self.introduce_type_var();
+                    mappings.insert(id.clone(), ty_var.clone());
+
+                    if let Some(ref ty) = self.lookup_type_var(id) {
+                        // Instantiate the type which is being pointed to
+                        let instantiated = self.instantiate(ty, mappings);
+                        
+                        // Make the ty_var point to the instantiated type
+                        self.substitute(
+                            ty_var.unwrap_ident(),
+                            instantiated);
+                    }
+
+                    ty_var
                 }
             }
             Ty::Rec(ref extends, ref props) => {
@@ -240,9 +249,8 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
         scope.unified.insert(ty_pairs);
     }
 
-    // println!("{}", scope.type_vars);
     // Generate a set of substitutions such that a == b in scope
-    let res = match (a, b) {
+    match (a, b) {
         (&Ty::Ident(ref a), b) => {
             // Check if we can abort early due to a recursive decl
             if let Ty::Ident(ref b) = *b {
@@ -383,17 +391,6 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
                 return Err(format!("Cannot unify {} and {}", a, b));
             }
 
-            // if ! only_b.is_empty() {
-            //     if let Some(Ty::Ident(ref ident)) = aextends {
-            //         scope.substitute(ident.clone(),
-            //                          Ty::Rec(box bextends.clone(),
-            //                                  only_b.values().map(|x| (**x).clone()).collect()));
-            //     } else {
-            //         // @TODO: This error message is awful
-            //         return Err(format!("Cannot unify {} and {}", a, b));
-            //     }
-            // }
-
             Ok(())
         }
         _ => {
@@ -402,9 +399,7 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
             // unify() is called.
             Err(format!("Cannot unify {} and {}", a, b))
         }
-    };
-    debug!("Successfully Unified {} <=> {}", a, b);
-    return res;
+    }
 }
 
 fn infer_body(scope: &mut Scope, params: &Vec<Ident>, body: &Expr) -> Result<Ty, String> {
