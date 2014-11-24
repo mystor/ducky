@@ -12,12 +12,15 @@
 - [x] Let-Polymorphism
 - [x] Extensible Record Types
 - [x] Infer from Method Calls
+- [x] Type Constructor-level Type Simplification
+- [ ] Type Simplification shouldn't expand explicit identifiers
+- [ ] Type Property Type Simplification
+- [ ] Pretty-printed Types
 - [ ] Named Structs (probably as a required "field type")
 - [ ] Conditional Statements
 - [ ] Type-safe Conditional Statements (Match vs types)
-- [ ] Primitive Record Definitions
+- [x] Primitive Record Definitions
 - [ ] Ensure Correctness (many more test cases needed)
-- [ ] Pretty-printed Types (including type simplification)
 - [ ] User Annotated Types
 - [ ] Mutable Records/Closures
 
