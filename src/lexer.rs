@@ -56,6 +56,8 @@ pub enum Token {
     LET,
     TRUE,
     FALSE,
+    MATCH,
+    AS,
 
     // Literals
     LIT_INTEGER(i64),
@@ -85,6 +87,11 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
             r"^\[" => |_| { LBRACKET },
             r"^\]" => |_| { RBRACKET },
 
+            // Arrows
+            r"^->" => |_| { RARROW },
+            r"^<-" => |_| { LARROW },
+            r"^=>" => |_| { FAT_ARROW },
+
             // Logical Operators
             r"^<=" => |_| { LE },
             r"^>=" => |_| { GE },
@@ -112,9 +119,6 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
             r"^,"  => |_| { COMMA },
             r"^;"  => |_| { SEMI },
             r"^:"  => |_| { COLON },
-            r"^->" => |_| { RARROW },
-            r"^<-" => |_| { LARROW },
-            r"^=>" => |_| { FAT_ARROW },
 
             // The interesting ones
             r"^[a-zA-Z_][a-zA-Z0-9_]*" => |v: &str| {
@@ -123,6 +127,8 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
                     "let" => LET,
                     "true" => TRUE,
                     "false" => FALSE,
+                    "match" => MATCH,
+                    "as" => AS,
                     _ => IDENT(Atom::from_slice(v)),
                 }
             },

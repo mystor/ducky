@@ -1,6 +1,6 @@
 use lexer::{Token};
 use lexer::Token::*;
-use il::{Expr, Call, Prop, Ident, Symbol, Literal, Stmt};
+use il::{Expr, Call, Prop, Ident, Symbol, Literal, Stmt, Branch, Ty, TyProp};
 
 // TODO: Desugaring shouldn't happen inline!
 
@@ -176,10 +176,11 @@ fn parse_deref<'a>(st: &mut State<'a>) -> Result<Expr, String> {
                 // TODO: Implement arrays n' shit
                 unimplemented!()
             }
-            Some(&LBRACE) => {
-                // TODO: Implement object update
-                unimplemented!()
-            }
+            /// @TODO: Reassess, conflicts with `match x {}` and `if x {}`
+            // Some(&LBRACE) => {
+            //     // TODO: Implement object update
+            //     unimplemented!()
+            // }
             _ => break
         }
     }
@@ -190,7 +191,7 @@ fn parse_args<'a>(st: &mut State<'a>) -> Result<Vec<Expr>, String> {
     let mut args = vec![];
     loop {
         // Check if we should finish here
-        if let Some(&LPAREN) = st.peek() { break }
+        if let Some(&RPAREN) = st.peek() { break }
 
         let arg = try!(parse_expr(st));
         args.push(arg);
@@ -233,6 +234,15 @@ fn parse_value<'a>(st: &mut State<'a>) -> Result<Expr, String> {
             let body = try!(parse_block_expr(st));
 
             Ok(Expr::Fn(params, box body))
+        }
+        Some(&MATCH) => {
+            st.eat();
+            let matchee = try!(parse_expr(st));
+            expect!(st ~ LBRACE);
+            let branches = try!(parse_branches(st));
+            expect!(st ~ RBRACE);
+            
+            Ok(Expr::Match(box matchee, branches))
         }
         Some(&LBRACE) => { // Object Literal
             st.eat();
@@ -311,6 +321,42 @@ fn parse_props<'a>(st: &mut State<'a>) -> Result<Vec<Prop>, String> {
     Ok(props)
 }
 
+fn parse_branches<'a>(st: &mut State<'a>) -> Result<Vec<Branch>, String> {
+    let mut branches = vec![];
+    loop {
+        // Try to parse type to match against
+        match st.peek() {
+            Some(&RBRACE) => break,
+            _ => {
+                let ty = try!(parse_ty(st));
+                expect!(st ~ AS);
+                expect!(st ~ IDENT(ref ident) => {
+                    let ident = Ident::from_atom(ident);
+                    expect!(st ~ FAT_ARROW);
+
+                    let expr = if let Some(&LBRACE) = st.peek() {
+                        try!(parse_block_expr(st))
+                    } else {
+                        try!(parse_expr(st))
+                    };
+
+                    branches.push(Branch{
+                        condition: ty,
+                        bind_to: ident,
+                        action: box expr,
+                    });
+                });
+            }
+        };
+        
+        match st.peek() {
+            Some(&SEMI) => st.eat(),
+            _ => break
+        };
+    }
+    Ok(branches)
+}
+
 fn parse_stmts<'a>(st: &mut State<'a>) -> Result<Vec<Stmt>, String> {
     let mut stmts = vec![];
     loop {
@@ -321,6 +367,109 @@ fn parse_stmts<'a>(st: &mut State<'a>) -> Result<Vec<Stmt>, String> {
         };
     }
     Ok(stmts)
+}
+
+fn parse_ty<'a>(st: &mut State<'a>) -> Result<Ty, String> {
+    match st.peek() {
+        Some(&FN) => {
+            st.eat();
+            // Function Type
+            expect!(st ~ LBRACKET);
+            let param_tys = try!(parse_paramtys(st));
+            expect!(st ~ RBRACKET);
+            expect!(st ~ RARROW);
+            let result_type = try!(parse_ty(st));
+            
+            Ok(Ty::Fn(param_tys, box result_type))
+        }
+        Some(&LBRACE) => {
+            st.eat();
+            // Record Type
+            let props = try!(parse_proptys(st));
+            expect!(st ~ RBRACE);
+            
+            Ok(Ty::Rec(box None, props))
+        }
+        Some(&IDENT(ref id)) => {
+            st.eat();
+            let ident_ty = Ty::Ident(Ident::from_atom(id));
+            // Identifier type or extended record
+            match st.peek() {
+                Some(&COLON) => {
+                    // Extended Record!
+                    // Parse the base record, and then extend it
+                    st.eat();
+                    let record = try!(parse_ty(st));
+                    if let Ty::Rec(box None, props) = record {
+                        Ok(Ty::Rec(box Some(ident_ty), props))
+                    } else {
+                        Err(format!("Unexpected non-record type!"))
+                    }
+                }
+                _ => {
+                    // Its just an identifier
+                    Ok(ident_ty)
+                }
+            }
+        }
+        unexpected => Err(format!("Unexpected {}!", unexpected)),
+    }
+}
+
+fn parse_paramtys<'a>(st: &mut State<'a>) -> Result<Vec<Ty>, String> {
+    let mut paramtys = vec![];
+
+    loop {
+        // Check if we should finish here
+        if let Some(&RPAREN) = st.peek() { break }
+
+        let paramty = try!(parse_ty(st));
+        paramtys.push(paramty);
+        
+        // Check if we might have another argument
+        // This allows for trailing commas in function calls.
+        match st.peek() {
+            Some(&COMMA) => st.eat(),
+            _ => break
+        };
+    }
+
+    Ok(paramtys)
+}
+
+fn parse_proptys<'a>(st: &mut State<'a>) -> Result<Vec<TyProp>, String> {
+    let mut props = vec![];
+
+    loop {
+        match st.peek() {
+            Some(&FN) => {
+                st.eat();
+                expect!(st ~ IDENT(ref ident) => {
+                    expect!(st ~ LPAREN);
+                    let params = try!(parse_paramtys(st));
+                    expect!(st ~ RPAREN);
+                    let body = try!(parse_ty(st));
+
+                    props.push(TyProp::Method(Symbol::from_atom(ident), params, body));
+                })
+            },
+            Some(&IDENT(ref ident)) => {
+                st.eat();
+                expect!(st ~ COLON);
+                let value = try!(parse_ty(st));
+
+                props.push(TyProp::Val(Symbol::from_atom(ident), value));
+            }
+            _ => break
+        };
+        
+        match st.peek() {
+            Some(&COMMA) => st.eat(),
+            _ => break
+        };
+    }
+    
+    Ok(props)
 }
 
 pub fn parse_program<'a>(st: &mut State<'a>) -> Result<Vec<Stmt>, String> {

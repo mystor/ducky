@@ -70,4 +70,15 @@ let id = fn(x) { x };
 let y = id(id);
 let z = id(5);
 "#);
+
+    // let polymorphism!
+    infer_types_for_code(r#"
+let x = 10;
+let res = match x {
+    { a: Int } as y => 1;
+    Int as z => {
+        1 + 1
+    }
+};
+"#);
 }

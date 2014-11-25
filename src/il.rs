@@ -186,6 +186,13 @@ pub enum Prop {
 }
 
 #[deriving(Show, Clone)]
+pub struct Branch {
+    pub condition: Ty,
+    pub bind_to: Ident,
+    pub action: Box<Expr>,
+}
+
+#[deriving(Show, Clone)]
 pub enum Call {
     Fn(Box<Expr>, Vec<Expr>),
     Method(Box<Expr>, Symbol, Vec<Expr>),
@@ -200,6 +207,7 @@ pub enum Expr {
     Call(Call),
     Fn(Vec<Ident>, Box<Expr>),
     Block(Vec<Stmt>),
+    Match(Box<Expr>, Vec<Branch>),
 }
 
 #[deriving(Show, Clone)]
