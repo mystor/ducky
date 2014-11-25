@@ -4,64 +4,15 @@ use infer::InferValue;
 
 pub fn simplify(iv: &InferValue) -> InferValue {
     let mut type_vars = HashMap::new();
-
     for (id, type_var) in iv.type_vars.iter() {
-        let mut type_var = type_var.clone();
-
-        loop {
-            let mut new_value;
-            match type_var {
-                Ty::Ident(ref ident) => {
-                    if let Some(ref ty) = iv.type_vars.get(ident) {
-                        new_value = (*ty).clone();
-                    } else {
-                        break;
-                    }
-                }
-                Ty::Rec(ref extends, ref values) => {
-                    match **extends {
-                        Some(Ty::Ident(ref ident)) => {
-                            if let Some(ref ty) = iv.type_vars.get(ident) {
-                                new_value = Ty::Rec(box Some((*ty).clone()), values.clone());
-                            } else {
-                                break;
-                            }
-                        }
-                        Some(Ty::Rec(ref extends2, ref values2)) => {
-                            let mut new_values = values.iter().chain(values2.iter()).map(|x| x.clone());
-                            new_value = Ty::Rec(extends2.clone(), new_values.collect());
-                        }
-                        _ => {
-                            break;
-                        }
-                    }
-                }
-                _ => break
-            }
-            type_var = new_value;
-        }
+        let type_var = inline_type(type_var, &iv.type_vars);
 
         type_vars.insert(id.clone(), type_var);
     }
     
     let mut data_vars = HashMap::new();
     for (id, data_var) in iv.data_vars.iter() {
-        let mut data_var = data_var.clone();
-
-        loop {
-            let mut new_value;
-            match data_var {
-                Ty::Ident(ref ident) => {
-                    if let Some(ref ty) = type_vars.get(ident) {
-                        new_value = (*ty).clone();
-                    } else {
-                        break;
-                    }
-                }
-                _ => break
-            }
-            data_var = new_value;
-        }
+        let data_var = inline_type(data_var, &type_vars);
 
         data_vars.insert(id.clone(), data_var);
     }
@@ -70,6 +21,52 @@ pub fn simplify(iv: &InferValue) -> InferValue {
         data_vars: data_vars,
         type_vars: type_vars,
     })
+}
+
+fn inline_type(ty: &Ty, type_vars: &HashMap<Ident, Ty>) -> Ty {
+    let mut inlined = ty.clone();
+    
+    // Inline any identifiers or record extends
+    loop {
+        let mut new_value;
+        match inlined {
+            Ty::Ident(ref ident) => {
+                // Don't inline non-internal identifiers
+                if let Ident(_, Internal(_)) = *ident {
+                    if let Some(ref ty) = type_vars.get(ident) {
+                        new_value = (*ty).clone();
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+
+            }
+            Ty::Rec(ref extends, ref values) => {
+                match **extends {
+                    Some(Ty::Ident(ref ident)) => {
+                        if let Some(ref ty) = type_vars.get(ident) {
+                            new_value = Ty::Rec(box Some((*ty).clone()), values.clone());
+                        } else {
+                            break;
+                        }
+                    }
+                    Some(Ty::Rec(ref extends2, ref values2)) => {
+                        let mut new_values = values.iter().chain(values2.iter()).map(|x| x.clone());
+                        new_value = Ty::Rec(extends2.clone(), new_values.collect());
+                    }
+                    _ => {
+                        break;
+                    }
+                }
+            }
+            _ => break
+        }
+        inlined = new_value;
+    }
+    
+    inlined
 }
 
 
