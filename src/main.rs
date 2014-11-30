@@ -88,4 +88,24 @@ let res = match x {
 };
 "#);
     gen::gen();
+    
+    unsafe {
+        use rustc_llvm as llvm;
+
+        let mut context = gen::GenContext::new();
+        context.enter_anon_fn();
+        let expr = gen::gen_expr(
+            &mut context,
+            &il::Expr::Call(il::Call::Fn(
+                box il::Expr::Fn(vec![il::Ident::from_slice("hello")],
+                                 box il::Expr::Literal(il::Literal::Int(5))),
+                vec![il::Expr::Literal(il::Literal::Int(5))])));
+        
+        
+        if let Ok(expr) = expr {
+            llvm::LLVMDumpValue(expr);
+        }
+        
+        context.dump();
+    }
 }
