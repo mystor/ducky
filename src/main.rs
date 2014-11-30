@@ -5,16 +5,22 @@
 extern crate regex_macros;
 extern crate regex;
 
+// Logging macros
 #[phase(plugin, link)]
 extern crate log;
 
+// Interned Strings (from servo)
 extern crate string_cache;
+
+// LLVM bindings (from rustc)
+extern crate rustc_llvm;
 
 pub mod lexer;
 pub mod parser;
 pub mod il;
 pub mod infer;
 pub mod simplify;
+pub mod gen;
 
 fn infer_types_for_code(code: &str) {
     info!("-----------------------");
@@ -81,4 +87,5 @@ let res = match x {
     }
 };
 "#);
+    gen::gen();
 }
