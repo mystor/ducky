@@ -56,6 +56,15 @@ impl GenContext {
     pub unsafe fn dump(&self) {
         llvm::LLVMDumpModule(self.module);
     }
+    
+    pub unsafe fn pass(&self) {
+        // let pmb = llvm::LLVMPassManagerBuilderCreate();
+        // llvm::LLVMPassManagerBuilderSetOptLevel(pmb, 3);
+        let pm = llvm::LLVMCreatePassManager();
+        // llvm::LLVMPassManagerBuilderPopulateModulePassManager(pmb, pm);
+        llvm::LLVMAddFunctionInliningPass(pm);
+        println!("{}", llvm::LLVMRunPassManager(pm, self.module));
+    }
 }
 
 pub fn gen() {
@@ -208,6 +217,9 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
                                                     follow.as_ptr(),
                                                     follow.len() as u32,
                                                     "fn_ptr".to_c_str().as_ptr());
+                    let fn_ptr = llvm::LLVMBuildLoad(ctx.builder,
+                                                     fn_ptr,
+                                                     "loaded_fn_ptr".to_c_str().as_ptr());
                     debug!("Or There....");
 
                     let follow2 = [llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
@@ -220,10 +232,10 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
                                                      callee,
                                                      follow2.as_ptr(),
                                                      follow2.len() as u32,
-                                                     "fn_ptr".to_c_str().as_ptr());
+                                                     "env_ptr".to_c_str().as_ptr());
                     let env_ptr = llvm::LLVMBuildLoad(ctx.builder,
                                                       env_ptr,
-                                                      "loaded_fn_ptr".to_c_str().as_ptr());
+                                                      "loaded_env_ptr".to_c_str().as_ptr());
 
                     debug!("Shoop?!?!");
                     // Add the environment as an implcit first argument
@@ -316,9 +328,9 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
             
             debug!("ClosureMake");
             llvm::LLVMDumpModule(ctx.module);
-            let vec_ty = llvm::LLVMVectorType(void_ptr_ty, 3);
+            let vec_ty = llvm::LLVMRustArrayType(void_ptr_ty, 3);
             
-            debug!("Vector type Built");
+            debug!("Array type Built");
             let closure = llvm::LLVMBuildMalloc(ctx.builder,
                                                 vec_ty,
                                                 "closure".to_c_str().as_ptr());

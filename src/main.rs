@@ -107,5 +107,7 @@ let res = match x {
         }
         
         context.dump();
+        context.pass();
+        context.dump();
     }
 }
