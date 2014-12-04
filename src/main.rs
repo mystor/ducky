@@ -10,7 +10,12 @@ extern crate regex;
 extern crate log;
 
 // Interned Strings (from servo)
+#[phase(plugin)]
+extern crate string_cache_macros;
 extern crate string_cache;
+
+#[phase(plugin)]
+extern crate lazy_static;
 
 // LLVM bindings (from rustc)
 extern crate rustc_llvm;
@@ -18,6 +23,7 @@ extern crate rustc_llvm;
 pub mod lexer;
 pub mod parser;
 pub mod il;
+pub mod ast;
 pub mod infer;
 pub mod simplify;
 pub mod gen;
@@ -87,27 +93,27 @@ let res = match x {
     }
 };
 "#);
-    gen::gen();
+    // gen::gen();
     
-    unsafe {
-        use rustc_llvm as llvm;
+    // unsafe {
+    //     use rustc_llvm as llvm;
 
-        let mut context = gen::GenContext::new();
-        context.enter_anon_fn();
-        let expr = gen::gen_expr(
-            &mut context,
-            &il::Expr::Call(il::Call::Fn(
-                box il::Expr::Fn(vec![il::Ident::from_slice("hello")],
-                                 box il::Expr::Literal(il::Literal::Int(5))),
-                vec![il::Expr::Literal(il::Literal::Int(5))])));
+    //     let mut context = gen::GenContext::new();
+    //     context.enter_anon_fn();
+    //     let expr = gen::gen_expr(
+    //         &mut context,
+    //         &il::Expr::Call(il::Call::Fn(
+    //             box il::Expr::Fn(vec![il::Ident::from_slice("hello")],
+    //                              box il::Expr::Literal(il::Literal::Int(5))),
+    //             vec![il::Expr::Literal(il::Literal::Int(5))])));
         
         
-        if let Ok(expr) = expr {
-            llvm::LLVMDumpValue(expr);
-        }
+    //     if let Ok(expr) = expr {
+    //         llvm::LLVMDumpValue(expr);
+    //     }
         
-        context.dump();
-        context.pass();
-        context.dump();
-    }
+    //     context.dump();
+    //     context.pass();
+    //     context.dump();
+    // }
 }

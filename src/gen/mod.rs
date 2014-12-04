@@ -1,3 +1,6 @@
+// TEMPORARY: This module is still a wip, and we want to reduce superfluous errors
+#![allow(dead_code, unused_variables)]
+
 use std::ptr;
 use std::collections::HashMap;
 use string_cache::Atom;
@@ -113,7 +116,7 @@ pub fn gen() {
 
         llvm::LLVMDumpModule(ctx.module);
         
-        llvm::LLVMWriteBitcodeToFile(ctx.module, "my_god_its_working.bc".to_c_str().as_ptr());
+        // llvm::LLVMWriteBitcodeToFile(ctx.module, "my_god_its_working.bc".to_c_str().as_ptr());
     }
 }
 
