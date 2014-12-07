@@ -118,6 +118,7 @@ pub enum Ty {
     Ident(Ident),
     Rec(Box<Option<Ty>>, Vec<TyProp>),
     Fn(Vec<Ty>, Box<Ty>),
+    Union(Vec<Ty>),
 }
 
 impl Ty {
@@ -154,6 +155,13 @@ impl fmt::Show for Ty {
                     try!(write!(f, "{}", arg));
                 }
                 write!(f, ") -> {}", res)
+            }
+            Ty::Union(ref options) => {
+                try!(write!(f, "("));
+                for option in options.iter() {
+                    try!(write!(f, "{} |", option));
+                }
+                write!(f, ")")
             }
         }
     }

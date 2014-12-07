@@ -114,6 +114,10 @@ impl <'a>Scope<'a> {
     pub fn new() -> Scope<'static> {
         // Type Variables
         let mut type_vars = HashMap::new();
+
+        // TODO: Builtins shouldn't be declared here, this is very sloppy.
+        // we should have a better way of declaring the builtins
+        // (possibly using macros so that we can use nice syntax?)
         type_vars.insert(Ident::from_builtin_slice("Int"),
                          Ty::Rec(box None, vec![TyProp::Method(Symbol::from_slice("+"),
                                                                vec![Ty::Ident(Ident::from_builtin_slice("Int"))],
@@ -197,6 +201,10 @@ impl <'a>Scope<'a> {
                 let nargs = args.iter().map(|x| { self.instantiate(x, mappings) }).collect();
                 Ty::Fn(nargs, box self.instantiate(&**res, mappings))
             }
+            Ty::Union(ref options) => {
+                let nopts = options.iter().map(|x| self.instantiate(x, mappings)).collect();
+                Ty::Union(nopts)
+            }
         }
     }
 }
@@ -244,11 +252,13 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
     }
     debug!("{}", "}");
 
-    // Record the previously unified values in the scope, and abort with Ok(()) if they have been unified before
+    // Record the previously unified values in the scope,
+    // and abort with Ok(()) if they have been unified before
     let ty_pairs = (a.clone(), b.clone());
     if scope.unified.contains(&(a.clone(), b.clone())) {
         return Ok(());
     } else {
+        // If they haven't been unified before, assume that they have!
         scope.unified.insert(ty_pairs);
     }
 
@@ -395,6 +405,15 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
             }
 
             Ok(())
+        }
+        (&Ty::Union(ref aopts), &Ty::Union(ref bopts)) => {
+            unimplemented!()
+        }
+        (&Ty::Union(_), other) => {
+            unify(scope, a, &Ty::Union(vec![other.clone()]))
+        }
+        (other, &Ty::Union(_)) => {
+            unify(scope,  &Ty::Union(vec![other.clone()]), b)
         }
         _ => {
             // TODO: This message itself should probably never be shown to

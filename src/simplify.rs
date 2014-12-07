@@ -108,6 +108,7 @@ fn prune_tyvars(iv: &InferValue) -> InferValue {
                     handle(old_type_vars, type_vars, param);
                 }
             }
+            Ty::Union(_) => unimplemented!()
         }
     }
 
