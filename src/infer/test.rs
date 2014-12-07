@@ -4,6 +4,8 @@ use parser;
 
 /// Compiles some code, and then infers its type.
 fn infer_code(code: &str) -> Result<infer::InferValue, String> {
+    // TODO: The program should probably panic if the error wasn't caused by infer_program(ast)
+    // Because these tests are only supposed to be testing inference, not lexing/parsing
     let tokens = try!(lexer::lex(code));
     let ast = try!(parser::parse_program(&mut parser::State::new(tokens.as_slice())));
     infer::infer_program(ast)
@@ -13,6 +15,7 @@ fn infer_code(code: &str) -> Result<infer::InferValue, String> {
 fn infer_err(code: &str) {
     match infer_code(code) {
         Ok(_) => {
+            // TODO: Actually display the incorrect types
             panic!("Unexpected success inferring types for code:\n\n{}", code);
         }
         Err(_) => {}
@@ -29,9 +32,8 @@ fn infer_ok(code: &str) {
     }
 }
 
-
 #[test]
-fn test_compose_identity() {
+fn compose_identity() {
     infer_ok(stringify!{
         let id = fn(x) { x };
 
@@ -41,7 +43,7 @@ fn test_compose_identity() {
 }
 
 #[test]
-fn test_add_ints() {
+fn add_ints() {
     infer_ok(stringify!{
         let add = fn (a, b) {
             a + b
@@ -51,7 +53,7 @@ fn test_add_ints() {
 }
 
 #[test]
-fn test_mul_ints() {
+fn mul_ints() {
     infer_ok(stringify!{
         let mul = fn (a, b) {
             a * b
@@ -61,8 +63,48 @@ fn test_mul_ints() {
 }
 
 #[test]
-fn test_mul_random_records() {
+fn mul_random_records() {
     infer_err(stringify!{
         {a: 5, b: 20} * {c: 30};
+    });
+}
+
+#[test]
+fn no_identity_transmute() {
+    infer_err(stringify!{
+        let id = fn (x) { x };
+
+        let id2 = id(id);
+        id2.foo;
+    });
+}
+
+#[test]
+fn infer_through_fn_call() {
+    infer_ok(stringify!{
+        let id = fn(x) { x };
+        let f = fn(y) {
+            id(y).prop
+        };
+    });
+}
+
+#[test]
+fn infer_args_through_intermediate_vars() {
+    infer_err(stringify!{
+        let id = fn(x) { x };
+        let f = fn(y) {
+            let z = id(y);
+            z.prop
+        };
+        f({});
+    });
+
+    infer_err(stringify!{
+        let f = fn(x) {
+            let y = x;
+            x.prop
+        };
+        f({});
     });
 }
