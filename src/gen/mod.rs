@@ -1,3 +1,5 @@
+#![allow(unused_variables, dead_code)]
+
 use std::ptr;
 use std::collections::HashMap;
 use string_cache::Atom;
@@ -16,13 +18,13 @@ impl GenContext {
     pub unsafe fn new() -> GenContext {
         // Create the global code generation context
         let context = llvm::LLVMContextCreate();
-        
+
         // Create the builder, it generates llvm instructions!
         let builder = llvm::LLVMCreateBuilderInContext(context);
-        
+
         // The module is the llvm construct that contains global stuff
         let module = llvm::LLVMModuleCreateWithNameInContext(
-            "my cool language".to_c_str().as_ptr(), context); 
+            "my cool language".to_c_str().as_ptr(), context);
 
         GenContext {
             context: context,
@@ -32,7 +34,7 @@ impl GenContext {
             interned_strings: HashMap::new(),
         }
     }
-    
+
     pub unsafe fn enter_anon_fn(&self) {
         // Create the main function!
         let the_fn = llvm::LLVMAddFunction(
@@ -42,21 +44,21 @@ impl GenContext {
                 0,
                 llvm::False
                     ));
-        
+
         // Implement it!
         let fn_body = llvm::LLVMAppendBasicBlockInContext(
             self.context,
             the_fn,
             "__ducky_main_block".to_c_str().as_ptr()
                 );
-        
+
         llvm::LLVMPositionBuilderAtEnd(self.builder, fn_body);
     }
-    
+
     pub unsafe fn dump(&self) {
         llvm::LLVMDumpModule(self.module);
     }
-    
+
     pub unsafe fn pass(&self) {
         // let pmb = llvm::LLVMPassManagerBuilderCreate();
         // llvm::LLVMPassManagerBuilderSetOptLevel(pmb, 3);
@@ -88,21 +90,21 @@ pub fn gen() {
                 0,
                 llvm::False
                     ));
-        
+
         // Implement it!
         let fn_body = llvm::LLVMAppendBasicBlockInContext(
             ctx.context,
             the_fn,
             "__ducky_main_block".to_c_str().as_ptr()
                 );
-        
+
         llvm::LLVMPositionBuilderAtEnd(ctx.builder, fn_body);
 
         let print_string = llvm::LLVMBuildGlobalStringPtr(
             ctx.builder,
             "some_string".to_c_str().as_ptr(),
             "print_string".to_c_str().as_ptr());
-        
+
         // Position the builder
         llvm::LLVMBuildCall(ctx.builder, puts,
                             [print_string].as_ptr(),
@@ -112,7 +114,7 @@ pub fn gen() {
         llvm::LLVMBuildRetVoid(ctx.builder);
 
         llvm::LLVMDumpModule(ctx.module);
-        
+
         llvm::LLVMWriteBitcodeToFile(ctx.module, "my_god_its_working.bc".to_c_str().as_ptr());
     }
 }
@@ -146,7 +148,7 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
                     if val > (1 << 28) - 1 || val < -(1 << 28) {
                         panic!("non-small integers haven't been implemented yet");
                     }
-                    
+
                     println!("{:X}, {:X}", val, ((val << 3) | 1).to_u64().unwrap());
 
                     // Small integers will be stored inside of a pointer type
@@ -196,11 +198,11 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
 
                     let callee : llvm::ValueRef = try!(gen_expr(ctx, callee));
 
-                    // let args : Vec<llvm::ValueRef> = 
+                    // let args : Vec<llvm::ValueRef> =
                     let args : Vec<_> = try!(
                         args.iter().map(|arg| gen_expr(ctx, arg)).collect());
 
-                    
+
                     debug!("Woop?");
                     let follow = [llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
                                                       0,
@@ -241,28 +243,28 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
                     // Add the environment as an implcit first argument
                     let mut true_args : Vec<llvm::ValueRef> = vec![env_ptr];
                     true_args.push_all(args.as_slice());
-                    
+
                     llvm::LLVMDumpModule(ctx.module);
                     for arg in true_args.iter() { llvm::LLVMDumpValue(*arg); }
                     llvm::LLVMDumpValue(fn_ptr);
-                    
+
                     let mut arg_tys = Vec::with_capacity(true_args.len());
                     for _ in true_args.iter() { arg_tys.push(void_ptr_ty); }
-                    
+
                     let fn_ty = llvm::LLVMPointerType(
                         llvm::LLVMFunctionType(void_ptr_ty,
                                                arg_tys.as_ptr(),
                                                arg_tys.len() as u32,
                                                llvm::False),
                         0);
-                                                       
+
                     let pointer_cast = llvm::LLVMBuildPointerCast(ctx.builder,
                                                                   fn_ptr,
                                                                   fn_ty,
                                                                   "closure_void".to_c_str().as_ptr());
-                    
+
                     debug!("pointer is cast!");
-                    
+
                     llvm::LLVMDumpValue(pointer_cast);
                     llvm::LLVMDumpValue(env_ptr);
                     for arg in true_args.iter() { llvm::LLVMDumpValue(*arg); }
@@ -279,11 +281,11 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
         Expr::Fn(ref params, box ref body) => {
             debug!("Expr::Fn");
             // @TODO: Closures! Environments! Oh my!
-            
+
             let void_ptr_ty = llvm::LLVMPointerType(
                 llvm::LLVMInt8TypeInContext(ctx.context),
                 0);
-            
+
             let mut param_tys = Vec::with_capacity(params.len() + 1);
             param_tys.push(void_ptr_ty);
             for _ in params.iter() { param_tys.push(void_ptr_ty) }
@@ -293,48 +295,48 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
                                                param_tys.as_slice().as_ptr(),
                                                param_tys.len() as u32,
                                                llvm::False);
-                                               
-                                               
+
+
             debug!("FnDecl");
             let fn_decl = llvm::LLVMAddFunction(ctx.module,
                                                 "anon_fn".to_c_str().as_ptr(),
                                                 fn_ty);
-            
-            
+
+
             debug!("FnBody");
             let fn_body = llvm::LLVMAppendBasicBlockInContext(
                 ctx.context,
                 fn_decl,
                 "anon_fn_body".to_c_str().as_ptr()
                     );
-            
+
             debug!("GenBody");
             {
                 // Generate the code inside of the new body
                 let new_builder = llvm::LLVMCreateBuilderInContext(ctx.context);
                 llvm::LLVMPositionBuilderAtEnd(new_builder, fn_body);
-            
+
                 let restore = ctx.builder;
                 ctx.builder = new_builder;
 
                 let expr = try!(gen_expr(ctx, body));
-                
+
                 llvm::LLVMBuildRet(ctx.builder, expr);
 
                 ctx.builder = restore;
-                
+
                 // llvm::LLVMDisposeBuilder(new_builder);
             }
-            
+
             debug!("ClosureMake");
             llvm::LLVMDumpModule(ctx.module);
             let vec_ty = llvm::LLVMRustArrayType(void_ptr_ty, 3);
-            
+
             debug!("Array type Built");
             let closure = llvm::LLVMBuildMalloc(ctx.builder,
                                                 vec_ty,
                                                 "closure".to_c_str().as_ptr());
-            
+
             debug!("Follow _THIS_");
 
             let follow = [llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
@@ -343,13 +345,13 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
                           llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
                                              1,
                                              llvm::True)];
-            
+
             debug!("Who Builds Stores anyways?!");
             let pointer_cast = llvm::LLVMBuildPointerCast(ctx.builder,
                                                           fn_decl,
                                                           void_ptr_ty,
                                                           "closure_void".to_c_str().as_ptr());
-            
+
             let gep = llvm::LLVMBuildGEP(ctx.builder,
                                          closure,
                                          follow.as_ptr(),
@@ -363,9 +365,9 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
             llvm::LLVMBuildStore(ctx.builder,
                                  pointer_cast, gep
                                  );
-            
+
             debug!("WAT???W?W?");
-            
+
             llvm::LLVMDumpModule(ctx.module);
             Ok(closure)
         }

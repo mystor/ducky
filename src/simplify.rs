@@ -9,14 +9,14 @@ pub fn simplify(iv: &InferValue) -> InferValue {
 
         type_vars.insert(id.clone(), type_var);
     }
-    
+
     let mut data_vars = HashMap::new();
     for (id, data_var) in iv.data_vars.iter() {
         let data_var = inline_type(data_var, &type_vars);
 
         data_vars.insert(id.clone(), data_var);
     }
-    
+
     prune_tyvars(&InferValue {
         data_vars: data_vars,
         type_vars: type_vars,
@@ -25,7 +25,7 @@ pub fn simplify(iv: &InferValue) -> InferValue {
 
 fn inline_type(ty: &Ty, type_vars: &HashMap<Ident, Ty>) -> Ty {
     let mut inlined = ty.clone();
-    
+
     // Inline any identifiers or record extends
     loop {
         let mut new_value;
@@ -53,7 +53,7 @@ fn inline_type(ty: &Ty, type_vars: &HashMap<Ident, Ty>) -> Ty {
                         }
                     }
                     Some(Ty::Rec(ref extends2, ref values2)) => {
-                        let mut new_values = values.iter().chain(values2.iter()).map(|x| x.clone());
+                        let new_values = values.iter().chain(values2.iter()).map(|x| x.clone());
                         new_value = Ty::Rec(extends2.clone(), new_values.collect());
                     }
                     _ => {
@@ -65,7 +65,7 @@ fn inline_type(ty: &Ty, type_vars: &HashMap<Ident, Ty>) -> Ty {
         }
         inlined = new_value;
     }
-    
+
     inlined
 }
 
@@ -115,7 +115,7 @@ fn prune_tyvars(iv: &InferValue) -> InferValue {
     for (_, data_var) in iv.data_vars.iter() {
         handle(&iv.type_vars, &mut type_vars, data_var);
     }
-    
+
     InferValue {
         data_vars: iv.data_vars.clone(),
         type_vars: type_vars,

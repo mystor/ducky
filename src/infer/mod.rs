@@ -525,10 +525,10 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
             // If the last element isn't an Expression, the value is Null ({})
             Ok(Ty::Ident(Ident(Atom::from_slice("Null"), BuiltIn)))
         }
-        Expr::Match(ref target, ref options) => {
+        Expr::Match(_, ref options) => {
             // unify target with union of option types
             // unless option types includes wildcard
-            for option in options.iter() {
+            for _ in options.iter() {
             }
             Ok(Ty::Ident(Ident(Atom::from_slice("Null"), BuiltIn)))
         }

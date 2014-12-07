@@ -1,4 +1,4 @@
-#![feature(phase, if_let, macro_rules, globs)]
+#![feature(phase, macro_rules, globs)]
 
 // We're going to use a lot of regular expressions
 #[phase(plugin)]
@@ -88,7 +88,7 @@ let res = match x {
 };
 "#);
     gen::gen();
-    
+
     unsafe {
         use rustc_llvm as llvm;
 
@@ -100,12 +100,12 @@ let res = match x {
                 box il::Expr::Fn(vec![il::Ident::from_slice("hello")],
                                  box il::Expr::Literal(il::Literal::Int(5))),
                 vec![il::Expr::Literal(il::Literal::Int(5))])));
-        
-        
+
+
         if let Ok(expr) = expr {
             llvm::LLVMDumpValue(expr);
         }
-        
+
         context.dump();
         context.pass();
         context.dump();
