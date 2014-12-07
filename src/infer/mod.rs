@@ -5,6 +5,9 @@ use il::*;
 
 use self::MaybeOwnedEnv::*;
 
+#[cfg(test)]
+pub mod test;
+
 #[deriving(Clone)]
 pub struct InferValue {
     pub data_vars: HashMap<Ident, Ty>,
@@ -58,7 +61,7 @@ impl Environment {
         let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
         let id = chars.slice_chars(self.counter % chars.len(), self.counter % chars.len() + 1);
         self.counter += 1;
-        
+
         Ty::Ident(Ident(Atom::from_slice(id), Internal(self.counter)))
     }
 
@@ -66,7 +69,7 @@ impl Environment {
     fn substitute(&mut self, id: Ident, ty: Ty) {
         self.type_vars.insert(id, ty);
     }
-    
+
     // Produce an InferValue
     fn as_infervalue(&self) -> InferValue {
         InferValue {
@@ -156,7 +159,7 @@ impl <'a>Scope<'a> {
                     if let Some(ref ty) = self.lookup_type_var(id) {
                         // Instantiate the type which is being pointed to
                         let instantiated = self.instantiate(ty, mappings);
-                        
+
                         // Make the ty_var point to the instantiated type
                         self.substitute(
                             ty_var.unwrap_ident(),
@@ -301,19 +304,19 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
             let mut aprops = HashMap::new();
             let mut bextends = _bextends.clone();
             let mut bprops = HashMap::new();
-            
+
             for aprop in _aprops.iter() {
                 aprops.insert(aprop.symbol().clone(), aprop.clone());
             }
-            
+
             for bprop in _bprops.iter() {
                 bprops.insert(bprop.symbol().clone(), bprop.clone());
             }
-            
+
             fn expand_extends<'a>(scope: &mut Scope<'a>, extends: &mut Option<Ty>, props: &mut HashMap<Symbol, TyProp>) {
                 loop {
                     let mut new_extends;
-                    
+
                     match *extends {
                         Some(Ty::Ident(ref ident)) => {
                             // We are extending an identifier, let's expand it!
@@ -337,14 +340,14 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
                         }
                         Some(_) => panic!("You can't extend a function?!? what?"), // @TODO: Improve
                     }
-                    
+
                     *extends = new_extends;
                 }
             }
-            
+
             expand_extends(scope, &mut aextends, &mut aprops);
             expand_extends(scope, &mut bextends, &mut bprops);
-            
+
             // Find the intersection between aprops and bprops
             let mut only_a = HashMap::new();
             let mut only_b = HashMap::new();
@@ -368,7 +371,7 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
             for &(aprop, bprop) in joint.values() {
                 try!(unify_props(scope, aprop, bprop));
             }
-            
+
             let common_free = scope.introduce_type_var();
 
             // Merge the remaining values into the other maps
