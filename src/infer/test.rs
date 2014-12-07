@@ -16,7 +16,7 @@ fn infer_err(code: &str) {
     match infer_code(code) {
         Ok(_) => {
             // TODO: Actually display the incorrect types
-            panic!("Unexpected success inferring types for code:\n\n{}", code);
+            panic!("\nUnexpected success inferring types for code:\n\n{}\n", code);
         }
         Err(_) => {}
     }
@@ -26,7 +26,7 @@ fn infer_err(code: &str) {
 fn infer_ok(code: &str) {
     match infer_code(code) {
         Err(e) => {
-            panic!("Unexpected error inferring types for code:\n{}\n{}", e, code);
+            panic!("\nUnexpected error inferring types for code:\n\n{}\n\n{}\n", e, code);
         }
         Ok(_) => {}
     }
@@ -106,5 +106,55 @@ fn infer_args_through_intermediate_vars() {
             x.prop
         };
         f({});
+    });
+}
+
+#[test]
+fn homogenous_if() {
+    infer_ok(stringify!{
+        let f = fn(x) {
+            if x {1} else {2}
+        }
+    });
+
+    infer_ok(stringify!{
+        let f = fn(x) {
+            if x { {a: 2} } else { {a: 3} }
+        }
+    });
+
+    infer_err(stringify!{
+        let f = fn(x) {
+            if x { {a: 2} } else { {a: 3} } + 1
+        }
+    });
+
+    infer_ok(stringify!{
+        let f = fn(x) {
+            if x {1} else {2} + 1
+        }
+    });
+}
+
+#[test]
+fn non_homogenous_if() {
+    infer_ok(stringify!{
+        let f = fn(x) {
+            if x {
+                { a: 2, b: 3 }
+            } else {
+                { a: 3 }
+            }
+        }
+    });
+
+    infer_ok(stringify!{
+        let f = fn(x) {
+            if x {
+                { a: 2, b: 3 }
+            } else {
+                { a: 3 }
+            }.a
+        }
     });
 }

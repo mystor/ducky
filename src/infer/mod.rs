@@ -525,6 +525,25 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
             // If the last element isn't an Expression, the value is Null ({})
             Ok(Ty::Ident(Ident(Atom::from_slice("Null"), BuiltIn)))
         }
+        Expr::If(box ref cond, box ref thn, box ref els) => {
+            // Infer the type of the condition, and ensure it is Bool
+            let cond_ty = try!(infer_expr(scope, cond));
+            try!(unify(scope, &cond_ty, &Ty::Ident(Ident(Atom::from_slice("Bool"), BuiltIn))));
+
+            // Infer the type of the different branches
+            let thn_ty = try!(infer_expr(scope, thn));
+            let els_ty = if let Some(ref els_expr) = *els {
+                try!(infer_expr(scope, els_expr))
+            } else {
+                Ty::Ident(Ident(Atom::from_slice("Null"), BuiltIn))
+            };
+
+            // Both branches currently need to return the same type. We hope to
+            // change that at some point by introducing sum types! Woo!
+            try!(unify(scope, &thn_ty, &els_ty));
+
+            Ok(thn_ty)
+        }
         Expr::Match(_, ref options) => {
             // unify target with union of option types
             // unless option types includes wildcard

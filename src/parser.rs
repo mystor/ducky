@@ -39,7 +39,7 @@ impl<'a> State<'a> {
     fn peek(&self) -> Option<&'a Token> {
         self.tokens.head()
     }
-    
+
     fn eat(&mut self) -> Option<&'a Token> {
         let tok = self.tokens.head();
         self.tokens = self.tokens.tail();
@@ -128,7 +128,7 @@ fn parse_tdm<'a>(st: &mut State<'a>) -> Result<Expr, String> {
 /// Unary prefix operators
 fn parse_unary<'a>(st: &mut State<'a>) -> Result<Expr, String> {
     fn mk_unary(op: &str, arg: Expr) -> Expr {
-        Expr::Call(Call::Method(box arg, Symbol::from_slice(op), vec![])) 
+        Expr::Call(Call::Method(box arg, Symbol::from_slice(op), vec![]))
     }
 
     match st.peek() {
@@ -195,7 +195,7 @@ fn parse_args<'a>(st: &mut State<'a>) -> Result<Vec<Expr>, String> {
 
         let arg = try!(parse_expr(st));
         args.push(arg);
-        
+
         // Check if we might have another argument
         // This allows for trailing commas in function calls.
         match st.peek() {
@@ -235,13 +235,24 @@ fn parse_value<'a>(st: &mut State<'a>) -> Result<Expr, String> {
 
             Ok(Expr::Fn(params, box body))
         }
+        Some(&IF) => {
+            st.eat();
+            let cond = try!(parse_expr(st));
+            let then = try!(parse_block_expr(st));
+            let els = if let Some(&ELSE) = st.peek() {
+                st.eat();
+                Some(try!(parse_block_expr(st)))
+            } else { None };
+
+            Ok(Expr::If(box cond, box then, box els))
+        }
         Some(&MATCH) => {
             st.eat();
             let matchee = try!(parse_expr(st));
             expect!(st ~ LBRACE);
             let branches = try!(parse_branches(st));
             expect!(st ~ RBRACE);
-            
+
             Ok(Expr::Match(box matchee, branches))
         }
         Some(&LBRACE) => { // Object Literal
@@ -312,7 +323,7 @@ fn parse_props<'a>(st: &mut State<'a>) -> Result<Vec<Prop>, String> {
             }
             _ => break
         };
-        
+
         match st.peek() {
             Some(&COMMA) => st.eat(),
             _ => break
@@ -348,7 +359,7 @@ fn parse_branches<'a>(st: &mut State<'a>) -> Result<Vec<Branch>, String> {
                 });
             }
         };
-        
+
         match st.peek() {
             Some(&SEMI) => st.eat(),
             _ => break
@@ -379,7 +390,7 @@ fn parse_ty<'a>(st: &mut State<'a>) -> Result<Ty, String> {
             expect!(st ~ RBRACKET);
             expect!(st ~ RARROW);
             let result_type = try!(parse_ty(st));
-            
+
             Ok(Ty::Fn(param_tys, box result_type))
         }
         Some(&LBRACE) => {
@@ -387,7 +398,7 @@ fn parse_ty<'a>(st: &mut State<'a>) -> Result<Ty, String> {
             // Record Type
             let props = try!(parse_proptys(st));
             expect!(st ~ RBRACE);
-            
+
             Ok(Ty::Rec(box None, props))
         }
         Some(&IDENT(ref id)) => {
@@ -425,7 +436,7 @@ fn parse_paramtys<'a>(st: &mut State<'a>) -> Result<Vec<Ty>, String> {
 
         let paramty = try!(parse_ty(st));
         paramtys.push(paramty);
-        
+
         // Check if we might have another argument
         // This allows for trailing commas in function calls.
         match st.peek() {
@@ -462,13 +473,13 @@ fn parse_proptys<'a>(st: &mut State<'a>) -> Result<Vec<TyProp>, String> {
             }
             _ => break
         };
-        
+
         match st.peek() {
             Some(&COMMA) => st.eat(),
             _ => break
         };
     }
-    
+
     Ok(props)
 }
 

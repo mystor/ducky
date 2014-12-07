@@ -207,6 +207,7 @@ pub enum Expr {
     Call(Call),
     Fn(Vec<Ident>, Box<Expr>),
     Block(Vec<Stmt>),
+    If(Box<Expr>, Box<Expr>, Box<Option<Expr>>),
     Match(Box<Expr>, Vec<Branch>),
 }
 

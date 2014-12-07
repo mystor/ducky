@@ -50,7 +50,7 @@ pub enum Token {
     RARROW,
     LARROW,
     FAT_ARROW,
-    
+
     // Keywords
     FN,
     LET,
@@ -58,6 +58,8 @@ pub enum Token {
     FALSE,
     MATCH,
     AS,
+    IF,
+    ELSE,
 
     // Literals
     LIT_INTEGER(i64),
@@ -71,7 +73,7 @@ pub enum Token {
 pub fn lex(program: &str) -> Result<Vec<Token>, String> {
     let mut toks: Vec<Token> = vec![];
     let mut stream = program.clone();
-    
+
     let start_len = stream.char_len();
 
     while stream.char_len() > 0 {
@@ -129,6 +131,8 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
                     "false" => FALSE,
                     "match" => MATCH,
                     "as" => AS,
+                    "if" => IF,
+                    "else" => ELSE,
                     _ => IDENT(Atom::from_slice(v)),
                 }
             },
@@ -141,6 +145,6 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
             return Err(format!("{}: {}", start_len - stream.char_len(), stream.char_at(0)));
         }
     }
-    
+
     Ok(toks)
 }
