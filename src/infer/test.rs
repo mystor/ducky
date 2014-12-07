@@ -38,6 +38,7 @@ fn compose_identity() {
         let id = fn(x) { x };
 
         let id2 = id(id)(id);
+        id(5);
         id2(5);
     });
 }
@@ -45,20 +46,14 @@ fn compose_identity() {
 #[test]
 fn add_ints() {
     infer_ok(stringify!{
-        let add = fn (a, b) {
-            a + b
-        };
-        add(1, 3);
+        1 + 3;
     });
 }
 
 #[test]
 fn mul_ints() {
     infer_ok(stringify!{
-        let mul = fn (a, b) {
-            a * b
-        };
-        mul(1, 3);
+        1 * 3;
     });
 }
 
@@ -138,6 +133,7 @@ fn homogenous_if() {
 
 #[test]
 fn non_homogenous_if() {
+    // Can have a non-homogenous if statement
     infer_ok(stringify!{
         let f = fn(x) {
             if x {
@@ -148,6 +144,7 @@ fn non_homogenous_if() {
         }
     });
 
+    // Can access the a property (common between branches)
     infer_ok(stringify!{
         let f = fn(x) {
             if x {
@@ -155,6 +152,17 @@ fn non_homogenous_if() {
             } else {
                 { a: 3 }
             }.a
+        }
+    });
+
+    // Can't access the b property (only on one branch)
+    infer_err(stringify!{
+        let f = fn(x) {
+            if x {
+                { a: 2, b: 3 }
+            } else {
+                { a: 3 }
+            }.b
         }
     });
 }
