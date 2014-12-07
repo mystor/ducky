@@ -2,66 +2,74 @@
 name = "ducky"
 version = "0.0.1"
 dependencies = [
- "string_cache 0.0.0 (git+https://github.com/servo/string-cache.git)",
+ "string_cache 0.0.0 (git+https://github.com/mystor/string-cache.git?ref=std-sync)",
 ]
 
 [[package]]
 name = "gcc"
-version = "0.0.1"
-source = "git+https://github.com/alexcrichton/gcc-rs#f25b3ba9c40303781189cc137fb98fffe5b56de7"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "lazy_static"
 version = "0.1.0"
-source = "git+https://github.com/Kimundi/lazy-static.rs#62976cb611c5396e11315ae64c9c389576240eb7"
+source = "git+https://github.com/Kimundi/lazy-static.rs#76f06e4fa7bc8c92f11d1def19bd4ddfd8017cd8"
 
 [[package]]
 name = "phf"
-version = "0.0.0"
-source = "git+https://github.com/sfackler/rust-phf#aa3e2d0aedea4d55c2e4cea1bdf6e89418dc1206"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "xxhash 0.0.1 (git+https://github.com/Jurily/rust-xxhash)",
+ "phf_shared 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "phf_mac"
-version = "0.0.0"
-source = "git+https://github.com/sfackler/rust-phf#aa3e2d0aedea4d55c2e4cea1bdf6e89418dc1206"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "time 0.0.2 (git+https://github.com/rust-lang/time)",
- "xxhash 0.0.1 (git+https://github.com/Jurily/rust-xxhash)",
+ "phf_shared 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "xxhash 0.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "string_cache"
 version = "0.0.0"
-source = "git+https://github.com/servo/string-cache.git#40a45f98e0b63d49774136d4b7627de2a5ce3706"
+source = "git+https://github.com/mystor/string-cache.git?ref=std-sync#bf93b93cee570ccb0bd40e3c7f6c4f7a77b94631"
 dependencies = [
  "lazy_static 0.1.0 (git+https://github.com/Kimundi/lazy-static.rs)",
- "phf 0.0.0 (git+https://github.com/sfackler/rust-phf)",
- "phf_mac 0.0.0 (git+https://github.com/sfackler/rust-phf)",
- "string_cache_macros 0.0.0 (git+https://github.com/servo/string-cache.git)",
- "xxhash 0.0.1 (git+https://github.com/Jurily/rust-xxhash)",
+ "phf 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "phf_mac 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "string_cache_macros 0.0.0 (git+https://github.com/mystor/string-cache.git?ref=std-sync)",
+ "xxhash 0.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "string_cache_macros"
 version = "0.0.0"
-source = "git+https://github.com/servo/string-cache.git#40a45f98e0b63d49774136d4b7627de2a5ce3706"
+source = "git+https://github.com/mystor/string-cache.git?ref=std-sync#bf93b93cee570ccb0bd40e3c7f6c4f7a77b94631"
 dependencies = [
  "lazy_static 0.1.0 (git+https://github.com/Kimundi/lazy-static.rs)",
 ]
 
 [[package]]
 name = "time"
-version = "0.0.2"
-source = "git+https://github.com/rust-lang/time#b58210c93a44d7b83a1a9b68b462f5a7fa1942f3"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "gcc 0.0.1 (git+https://github.com/alexcrichton/gcc-rs)",
+ "gcc 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "xxhash"
 version = "0.0.1"
-source = "git+https://github.com/Jurily/rust-xxhash#6027ce91f9164f2f936149547f789103b1b671e6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
