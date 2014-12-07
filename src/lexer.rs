@@ -56,8 +56,6 @@ pub enum Token {
     LET,
     TRUE,
     FALSE,
-    MATCH,
-    AS,
     IF,
     ELSE,
 
@@ -129,8 +127,6 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
                     "let" => LET,
                     "true" => TRUE,
                     "false" => FALSE,
-                    "match" => MATCH,
-                    "as" => AS,
                     "if" => IF,
                     "else" => ELSE,
                     _ => IDENT(Atom::from_slice(v)),

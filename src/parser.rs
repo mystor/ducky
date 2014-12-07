@@ -1,6 +1,6 @@
 use lexer::{Token};
 use lexer::Token::*;
-use il::{Expr, Call, Prop, Ident, Symbol, Literal, Stmt, Branch, Ty, TyProp};
+use il::{Expr, Call, Prop, Ident, Symbol, Literal, Stmt, Ty, TyProp};
 
 // TODO: Desugaring shouldn't happen inline!
 
@@ -246,15 +246,6 @@ fn parse_value<'a>(st: &mut State<'a>) -> Result<Expr, String> {
 
             Ok(Expr::If(box cond, box then, box els))
         }
-        Some(&MATCH) => {
-            st.eat();
-            let matchee = try!(parse_expr(st));
-            expect!(st ~ LBRACE);
-            let branches = try!(parse_branches(st));
-            expect!(st ~ RBRACE);
-
-            Ok(Expr::Match(box matchee, branches))
-        }
         Some(&LBRACE) => { // Object Literal
             st.eat();
             let props = try!(parse_props(st));
@@ -330,42 +321,6 @@ fn parse_props<'a>(st: &mut State<'a>) -> Result<Vec<Prop>, String> {
         };
     }
     Ok(props)
-}
-
-fn parse_branches<'a>(st: &mut State<'a>) -> Result<Vec<Branch>, String> {
-    let mut branches = vec![];
-    loop {
-        // Try to parse type to match against
-        match st.peek() {
-            Some(&RBRACE) => break,
-            _ => {
-                let ty = try!(parse_ty(st));
-                expect!(st ~ AS);
-                expect!(st ~ IDENT(ref ident) => {
-                    let ident = Ident::from_atom(ident);
-                    expect!(st ~ FAT_ARROW);
-
-                    let expr = if let Some(&LBRACE) = st.peek() {
-                        try!(parse_block_expr(st))
-                    } else {
-                        try!(parse_expr(st))
-                    };
-
-                    branches.push(Branch{
-                        condition: ty,
-                        bind_to: ident,
-                        action: box expr,
-                    });
-                });
-            }
-        };
-
-        match st.peek() {
-            Some(&SEMI) => st.eat(),
-            _ => break
-        };
-    }
-    Ok(branches)
 }
 
 fn parse_stmts<'a>(st: &mut State<'a>) -> Result<Vec<Stmt>, String> {

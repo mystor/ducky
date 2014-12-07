@@ -544,13 +544,6 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
 
             Ok(thn_ty)
         }
-        Expr::Match(_, ref options) => {
-            // unify target with union of option types
-            // unless option types includes wildcard
-            for _ in options.iter() {
-            }
-            Ok(Ty::Ident(Ident(Atom::from_slice("Null"), BuiltIn)))
-        }
     }
 }
 
