@@ -96,10 +96,11 @@ let res = match x {
         context.enter_anon_fn();
         let expr = gen::gen_expr(
             &mut context,
-            &il::Expr::Call(il::Call::Fn(
+            &il::Expr::Call(
                 box il::Expr::Fn(vec![il::Ident::from_slice("hello")],
                                  box il::Expr::Literal(il::Literal::Int(5))),
-                vec![il::Expr::Literal(il::Literal::Int(5))])));
+                il::Symbol::from_slice("call"),
+                vec![il::Expr::Literal(il::Literal::Int(5))]));
 
 
         if let Ok(expr) = expr {

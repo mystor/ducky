@@ -1,6 +1,6 @@
 use lexer::{Token};
 use lexer::Token::*;
-use il::{Expr, Call, Prop, Ident, Symbol, Literal, Stmt, Ty, TyProp};
+use il::{Expr, Prop, Ident, Symbol, Literal, Stmt, Ty, TyProp};
 
 // TODO: Desugaring shouldn't happen inline!
 
@@ -76,7 +76,7 @@ pub fn parse_expr<'a>(st: &mut State<'a>) -> Result<Expr, String> {
 
 /// Infix expressions are just method calls on the lhs argument
 fn mk_infix(op: &str, lhs: Expr, rhs: Expr) -> Expr {
-    Expr::Call(Call::Method(box lhs, Symbol::from_slice(op), vec![rhs]))
+    Expr::Call(box lhs, Symbol::from_slice(op), vec![rhs])
 }
 
 /// Infix operators + and -
@@ -128,7 +128,7 @@ fn parse_tdm<'a>(st: &mut State<'a>) -> Result<Expr, String> {
 /// Unary prefix operators
 fn parse_unary<'a>(st: &mut State<'a>) -> Result<Expr, String> {
     fn mk_unary(op: &str, arg: Expr) -> Expr {
-        Expr::Call(Call::Method(box arg, Symbol::from_slice(op), vec![]))
+        Expr::Call(box arg, Symbol::from_slice(op), vec![])
     }
 
     match st.peek() {
@@ -163,14 +163,14 @@ fn parse_deref<'a>(st: &mut State<'a>) -> Result<Expr, String> {
                     expect!(st ~ LPAREN);
                     let args = try!(parse_args(st));
                     expect!(st ~ RPAREN);
-                    lhs = Expr::Call(Call::Method(box lhs, Symbol::from_atom(ident), args));
+                    lhs = Expr::Call(box lhs, Symbol::from_atom(ident), args);
                 })
             }
             Some(&LPAREN) => {
                 st.eat();
                 let args = try!(parse_args(st));
                 expect!(st ~ RPAREN);
-                lhs = Expr::Call(Call::Fn(box lhs, args));
+                lhs = Expr::Call(box lhs, Symbol::from_slice("call"), args);
             }
             Some(&LBRACKET) => {
                 // TODO: Implement arrays n' shit
@@ -346,7 +346,12 @@ fn parse_ty<'a>(st: &mut State<'a>) -> Result<Ty, String> {
             expect!(st ~ RARROW);
             let result_type = try!(parse_ty(st));
 
-            Ok(Ty::Fn(param_tys, box result_type))
+            Ok(Ty::Rec(box None,
+                       vec![
+                           TyProp::Method(
+                               Symbol::from_slice("call"),
+                               param_tys,
+                               result_type)]))
         }
         Some(&LBRACE) => {
             st.eat();

@@ -102,12 +102,6 @@ fn prune_tyvars(iv: &InferValue) -> InferValue {
                     }
                 }
             }
-            Ty::Fn(ref params, box ref result) => {
-                handle(old_type_vars, type_vars, result);
-                for param in params.iter() {
-                    handle(old_type_vars, type_vars, param);
-                }
-            }
             Ty::Union(_) => unimplemented!()
         }
     }

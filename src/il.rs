@@ -117,7 +117,6 @@ impl fmt::Show for TyProp {
 pub enum Ty {
     Ident(Ident),
     Rec(Box<Option<Ty>>, Vec<TyProp>),
-    Fn(Vec<Ty>, Box<Ty>),
     Union(Vec<Ty>),
 }
 
@@ -148,13 +147,6 @@ impl fmt::Show for Ty {
                     }
                     write!(f, "{}", "}")
                 }
-            }
-            Ty::Fn(ref args, box ref res) => {
-                try!(write!(f, "fn ("));
-                for arg in args.iter() {
-                    try!(write!(f, "{}", arg));
-                }
-                write!(f, ") -> {}", res)
             }
             Ty::Union(ref options) => {
                 try!(write!(f, "("));
@@ -194,18 +186,12 @@ pub enum Prop {
 }
 
 #[deriving(Show, Clone)]
-pub enum Call {
-    Fn(Box<Expr>, Vec<Expr>),
-    Method(Box<Expr>, Symbol, Vec<Expr>),
-}
-
-#[deriving(Show, Clone)]
 pub enum Expr {
     Literal(Literal),
     Ident(Ident),
     Rec(Vec<Prop>),
     Member(Box<Expr>, Symbol),
-    Call(Call),
+    Call(Box<Expr>, Symbol, Vec<Expr>),
     Fn(Vec<Ident>, Box<Expr>),
     Block(Vec<Stmt>),
     If(Box<Expr>, Box<Expr>, Box<Option<Expr>>),

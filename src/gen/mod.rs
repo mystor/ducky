@@ -181,103 +181,103 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
         Expr::Member(box ref expr, ref symbol) => {
             unimplemented!()
         }
-        Expr::Call(ref call) => {
-            debug!("Expr::Call");
-            match *call {
-                Call::Fn(box ref callee, ref args) => {
-                    // All callable objects are closures. Closures all follow exactly
-                    // the same implementation form:
-                    // {
-                    //   map: _____fn_map_____
-                    //   fn: function*
-                    //   env: environment
-                    // }
-                    let void_ptr_ty = llvm::LLVMPointerType(
-                        llvm::LLVMInt8TypeInContext(ctx.context),
-                        0);
+        // Expr::Call(ref call) => {
+        //     debug!("Expr::Call");
+        //     match *call {
+        //         Call::Fn(box ref callee, ref args) => {
+        //             // All callable objects are closures. Closures all follow exactly
+        //             // the same implementation form:
+        //             // {
+        //             //   map: _____fn_map_____
+        //             //   fn: function*
+        //             //   env: environment
+        //             // }
+        //             let void_ptr_ty = llvm::LLVMPointerType(
+        //                 llvm::LLVMInt8TypeInContext(ctx.context),
+        //                 0);
 
-                    let callee : llvm::ValueRef = try!(gen_expr(ctx, callee));
+        //             let callee : llvm::ValueRef = try!(gen_expr(ctx, callee));
 
-                    // let args : Vec<llvm::ValueRef> =
-                    let args : Vec<_> = try!(
-                        args.iter().map(|arg| gen_expr(ctx, arg)).collect());
+        //             // let args : Vec<llvm::ValueRef> =
+        //             let args : Vec<_> = try!(
+        //                 args.iter().map(|arg| gen_expr(ctx, arg)).collect());
 
 
-                    debug!("Woop?");
-                    let follow = [llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
-                                                      0,
-                                                      llvm::True),
-                                  llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
-                                                     1,
-                                                     llvm::True)];
+        //             debug!("Woop?");
+        //             let follow = [llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
+        //                                               0,
+        //                                               llvm::True),
+        //                           llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
+        //                                              1,
+        //                                              llvm::True)];
 
-                    // @TODO: This is probably wrong
-                    // I have no idea if I'm using GEP right...
-                    debug!("Here....");
-                    let fn_ptr = llvm::LLVMBuildGEP(ctx.builder,
-                                                    callee,
-                                                    follow.as_ptr(),
-                                                    follow.len() as u32,
-                                                    "fn_ptr".to_c_str().as_ptr());
-                    let fn_ptr = llvm::LLVMBuildLoad(ctx.builder,
-                                                     fn_ptr,
-                                                     "loaded_fn_ptr".to_c_str().as_ptr());
-                    debug!("Or There....");
+        //             // @TODO: This is probably wrong
+        //             // I have no idea if I'm using GEP right...
+        //             debug!("Here....");
+        //             let fn_ptr = llvm::LLVMBuildGEP(ctx.builder,
+        //                                             callee,
+        //                                             follow.as_ptr(),
+        //                                             follow.len() as u32,
+        //                                             "fn_ptr".to_c_str().as_ptr());
+        //             let fn_ptr = llvm::LLVMBuildLoad(ctx.builder,
+        //                                              fn_ptr,
+        //                                              "loaded_fn_ptr".to_c_str().as_ptr());
+        //             debug!("Or There....");
 
-                    let follow2 = [llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
-                                                      0,
-                                                      llvm::True),
-                                   llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
-                                                      2,
-                                                      llvm::True)];
-                    let env_ptr = llvm::LLVMBuildGEP(ctx.builder,
-                                                     callee,
-                                                     follow2.as_ptr(),
-                                                     follow2.len() as u32,
-                                                     "env_ptr".to_c_str().as_ptr());
-                    let env_ptr = llvm::LLVMBuildLoad(ctx.builder,
-                                                      env_ptr,
-                                                      "loaded_env_ptr".to_c_str().as_ptr());
+        //             let follow2 = [llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
+        //                                               0,
+        //                                               llvm::True),
+        //                            llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
+        //                                               2,
+        //                                               llvm::True)];
+        //             let env_ptr = llvm::LLVMBuildGEP(ctx.builder,
+        //                                              callee,
+        //                                              follow2.as_ptr(),
+        //                                              follow2.len() as u32,
+        //                                              "env_ptr".to_c_str().as_ptr());
+        //             let env_ptr = llvm::LLVMBuildLoad(ctx.builder,
+        //                                               env_ptr,
+        //                                               "loaded_env_ptr".to_c_str().as_ptr());
 
-                    debug!("Shoop?!?!");
-                    // Add the environment as an implcit first argument
-                    let mut true_args : Vec<llvm::ValueRef> = vec![env_ptr];
-                    true_args.push_all(args.as_slice());
+        //             debug!("Shoop?!?!");
+        //             // Add the environment as an implcit first argument
+        //             let mut true_args : Vec<llvm::ValueRef> = vec![env_ptr];
+        //             true_args.push_all(args.as_slice());
 
-                    llvm::LLVMDumpModule(ctx.module);
-                    for arg in true_args.iter() { llvm::LLVMDumpValue(*arg); }
-                    llvm::LLVMDumpValue(fn_ptr);
+        //             llvm::LLVMDumpModule(ctx.module);
+        //             for arg in true_args.iter() { llvm::LLVMDumpValue(*arg); }
+        //             llvm::LLVMDumpValue(fn_ptr);
 
-                    let mut arg_tys = Vec::with_capacity(true_args.len());
-                    for _ in true_args.iter() { arg_tys.push(void_ptr_ty); }
+        //             let mut arg_tys = Vec::with_capacity(true_args.len());
+        //             for _ in true_args.iter() { arg_tys.push(void_ptr_ty); }
 
-                    let fn_ty = llvm::LLVMPointerType(
-                        llvm::LLVMFunctionType(void_ptr_ty,
-                                               arg_tys.as_ptr(),
-                                               arg_tys.len() as u32,
-                                               llvm::False),
-                        0);
+        //             let fn_ty = llvm::LLVMPointerType(
+        //                 llvm::LLVMFunctionType(void_ptr_ty,
+        //                                        arg_tys.as_ptr(),
+        //                                        arg_tys.len() as u32,
+        //                                        llvm::False),
+        //                 0);
 
-                    let pointer_cast = llvm::LLVMBuildPointerCast(ctx.builder,
-                                                                  fn_ptr,
-                                                                  fn_ty,
-                                                                  "closure_void".to_c_str().as_ptr());
+        //             let pointer_cast = llvm::LLVMBuildPointerCast(ctx.builder,
+        //                                                           fn_ptr,
+        //                                                           fn_ty,
+        //                                                           "closure_void".to_c_str().as_ptr());
 
-                    debug!("pointer is cast!");
+        //             debug!("pointer is cast!");
 
-                    llvm::LLVMDumpValue(pointer_cast);
-                    llvm::LLVMDumpValue(env_ptr);
-                    for arg in true_args.iter() { llvm::LLVMDumpValue(*arg); }
-                    // And call the function pointer!
-                    Ok(llvm::LLVMBuildCall(ctx.builder,
-                                           pointer_cast,
-                                           true_args.as_ptr(),
-                                           true_args.len() as u32,
-                                           "the_call_thing".to_c_str().as_ptr()))
-                }
-                _ => unimplemented!()
-            }
-        }
+        //             llvm::LLVMDumpValue(pointer_cast);
+        //             llvm::LLVMDumpValue(env_ptr);
+        //             for arg in true_args.iter() { llvm::LLVMDumpValue(*arg); }
+        //             // And call the function pointer!
+        //             Ok(llvm::LLVMBuildCall(ctx.builder,
+        //                                    pointer_cast,
+        //                                    true_args.as_ptr(),
+        //                                    true_args.len() as u32,
+        //                                    "the_call_thing".to_c_str().as_ptr()))
+        //         }
+        //         _ => unimplemented!()
+        //     }
+        // }
         Expr::Fn(ref params, box ref body) => {
             debug!("Expr::Fn");
             // @TODO: Closures! Environments! Oh my!

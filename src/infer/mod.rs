@@ -197,10 +197,6 @@ impl <'a>Scope<'a> {
 
                 Ty::Rec(box extends, props)
             }
-            Ty::Fn(ref args, ref res) => {
-                let nargs = args.iter().map(|x| { self.instantiate(x, mappings) }).collect();
-                Ty::Fn(nargs, box self.instantiate(&**res, mappings))
-            }
             Ty::Union(ref options) => {
                 let nopts = options.iter().map(|x| self.instantiate(x, mappings)).collect();
                 Ty::Union(nopts)
@@ -293,21 +289,6 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
                 scope.substitute(b.clone(), a.clone());
                 Ok(())
             }
-        }
-        (&Ty::Fn(ref aargs, ref ares), &Ty::Fn(ref bargs, ref bres)) => {
-            // Argument lists must have the same length for functions to unify
-            // This is usually handled by currying which may exist in this language later
-            if aargs.len() != bargs.len() {
-                return Err(format!("Cannot unify {} and {}", a, b));
-            }
-
-            // Unify each of the arguments
-            for (aarg, barg) in aargs.iter().zip(bargs.iter()) {
-                try!(unify(scope, aarg, barg));
-            }
-
-            // Unify the results
-            unify(scope, &**ares, &**bres)
         }
         (&Ty::Rec(box ref _aextends, ref _aprops), &Ty::Rec(box ref _bextends, ref _bprops)) => {
             let mut aextends = _aextends.clone();
@@ -415,12 +396,6 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
         (other, &Ty::Union(_)) => {
             unify(scope,  &Ty::Union(vec![other.clone()]), b)
         }
-        _ => {
-            // TODO: This message itself should probably never be shown to
-            // users of the compiler, it should be made more useful where
-            // unify() is called.
-            Err(format!("Cannot unify {} and {}", a, b))
-        }
     }
 }
 
@@ -445,21 +420,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
             let uninst = scope.lookup_data_var(ident);
             Ok(scope.instantiate(&uninst, &mut HashMap::new()))
         }
-        Expr::Call(Call::Fn(ref callee, ref params)) => {
-            let callee_ty = try!(infer_expr(scope, &**callee));
-            let mut param_tys = Vec::with_capacity(params.len());
-            for param in params.iter() {
-                match infer_expr(scope, param) {
-                    Ok(ty) => { param_tys.push(ty); }
-                    Err(err) => { return Err(err); }
-                }
-            }
-            let beta = scope.introduce_type_var();
-            // TODO: Vastly improve this error message
-            try!(unify(scope, &callee_ty, &Ty::Fn(param_tys, box beta.clone())));
-            Ok(beta)
-        }
-        Expr::Call(Call::Method(ref obj, ref symb, ref params)) => {
+        Expr::Call(ref obj, ref symb, ref params) => {
             let obj_ty = try!(infer_expr(scope, &**obj));
 
             let mut param_tys = Vec::with_capacity(params.len());
@@ -494,7 +455,8 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
             for param in params.iter() {
                 param_tys.push(scope.lookup_data_var(param));
             }
-            Ok(Ty::Fn(param_tys, box body_ty))
+            Ok(Ty::Rec(box None,
+                       vec![TyProp::Method(Symbol::from_slice("call"), param_tys, body_ty)]))
         }
         Expr::Rec(ref props) => {
             let self_type = scope.introduce_type_var();
