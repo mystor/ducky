@@ -119,12 +119,12 @@ impl <'a>Scope<'a> {
         // we should have a better way of declaring the builtins
         // (possibly using macros so that we can use nice syntax?)
         type_vars.insert(Ident::from_builtin_slice("Int"),
-                         Ty::Rec(box None, vec![TyProp::Method(Symbol::from_slice("+"),
-                                                               vec![Ty::Ident(Ident::from_builtin_slice("Int"))],
-                                                               Ty::Ident(Ident::from_builtin_slice("Int"))),
-                                                TyProp::Method(Symbol::from_slice("*"),
-                                                               vec![Ty::Ident(Ident::from_builtin_slice("Int"))],
-                                                               Ty::Ident(Ident::from_builtin_slice("Int")))]));
+                         Ty::Rec(None, vec![TyProp::Method(Symbol::from_slice("+"),
+                                                           vec![Ty::Ident(Ident::from_builtin_slice("Int"))],
+                                                           Ty::Ident(Ident::from_builtin_slice("Int"))),
+                                            TyProp::Method(Symbol::from_slice("*"),
+                                                           vec![Ty::Ident(Ident::from_builtin_slice("Int"))],
+                                                           Ty::Ident(Ident::from_builtin_slice("Int")))]));
 
         Scope{
             env: OwnedEnv(Environment{
@@ -176,8 +176,8 @@ impl <'a>Scope<'a> {
             Ty::Rec(ref extends, ref props) => {
                 // Instantiate all of the properties!
                 let extends = match *extends { // @TODO: Why can't I .map()?
-                    box Some(ref extends) => Some(self.instantiate(extends, mappings)),
-                    box None => None,
+                    Some(box ref extends) => Some(box self.instantiate(extends, mappings)),
+                    None => None,
                 };
 
                 let props = props.iter().map(|prop| {
@@ -195,7 +195,7 @@ impl <'a>Scope<'a> {
                     }
                 }).collect();
 
-                Ty::Rec(box extends, props)
+                Ty::Rec(extends, props)
             }
             Ty::Union(ref options) => {
                 let nopts = options.iter().map(|x| self.instantiate(x, mappings)).collect();
@@ -290,7 +290,7 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
                 Ok(())
             }
         }
-        (&Ty::Rec(box ref _aextends, ref _aprops), &Ty::Rec(box ref _bextends, ref _bprops)) => {
+        (&Ty::Rec(ref _aextends, ref _aprops), &Ty::Rec(ref _bextends, ref _bprops)) => {
             let mut aextends = _aextends.clone();
             let mut aprops = HashMap::new();
             let mut bextends = _bextends.clone();
@@ -304,21 +304,21 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
                 bprops.insert(bprop.symbol().clone(), bprop.clone());
             }
 
-            fn expand_extends<'a>(scope: &mut Scope<'a>, extends: &mut Option<Ty>, props: &mut HashMap<Symbol, TyProp>) {
+            fn expand_extends<'a>(scope: &mut Scope<'a>, extends: &mut Option<Box<Ty>>, props: &mut HashMap<Symbol, TyProp>) {
                 loop {
                     let mut new_extends;
 
                     match *extends {
-                        Some(Ty::Ident(ref ident)) => {
+                        Some(box Ty::Ident(ref ident)) => {
                             // We are extending an identifier, let's expand it!
                             if let Some(ty) = scope.lookup_type_var(ident) {
-                                new_extends = Some(ty);
+                                new_extends = Some(box ty);
                             } else {
                                 // We are looking at a wildcard! woo!
                                 break;
                             }
                         }
-                        Some(Ty::Rec(box ref nextends, ref nprops)) => {
+                        Some(box Ty::Rec(ref nextends, ref nprops)) => {
                             // We are extending a record, merge it in!
                             for prop in nprops.iter() {
                                 assert!(props.insert(prop.symbol().clone(), prop.clone()).is_none());
@@ -366,20 +366,20 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
             let common_free = scope.introduce_type_var();
 
             // Merge the remaining values into the other maps
-            if let Some(Ty::Ident(ref ident)) = bextends {
+            if let Some(box Ty::Ident(ref ident)) = bextends {
                 // We need to unify bextends with something
                 scope.substitute(ident.clone(),
-                                 Ty::Rec(box Some(common_free.clone()),
+                                 Ty::Rec(Some(box common_free.clone()),
                                          only_a.values().map(|x| (**x).clone()).collect()));
             } else if ! only_a.is_empty() {
                 return Err(format!("Cannot unify {} and {}", a, b));
             }
 
             // Merge the remaining values into the other maps
-            if let Some(Ty::Ident(ref ident)) = aextends {
+            if let Some(box Ty::Ident(ref ident)) = aextends {
                 // We need to unify bextends with something
                 scope.substitute(ident.clone(),
-                                 Ty::Rec(box Some(common_free.clone()),
+                                 Ty::Rec(Some(box common_free.clone()),
                                          only_b.values().map(|x| (**x).clone()).collect()));
             } else if ! only_b.is_empty() {
                 return Err(format!("Cannot unify {} and {}", a, b));
@@ -390,11 +390,11 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
         (&Ty::Union(ref aopts), &Ty::Union(ref bopts)) => {
             unimplemented!()
         }
-        (&Ty::Union(_), other) => {
-            unify(scope, a, &Ty::Union(vec![other.clone()]))
+        (&Ty::Union(_), &Ty::Rec(_, _)) => {
+            unimplemented!()
         }
-        (other, &Ty::Union(_)) => {
-            unify(scope,  &Ty::Union(vec![other.clone()]), b)
+        (&Ty::Rec(_, _), &Ty::Union(_)) => {
+            unimplemented!()
         }
     }
 }
@@ -433,7 +433,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
 
             let res = scope.introduce_type_var();
             // The object must have the method with the correct type. UNIFY!
-            let require_ty = Ty::Rec(box Some(scope.introduce_type_var()),
+            let require_ty = Ty::Rec(Some(box scope.introduce_type_var()),
                                      vec![TyProp::Method(symb.clone(), param_tys, res.clone())]);
             try!(unify(scope, &obj_ty, &require_ty));
             Ok(res)
@@ -443,7 +443,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
 
             let ty = scope.introduce_type_var();
 
-            let require_ty = Ty::Rec(box Some(scope.introduce_type_var()),
+            let require_ty = Ty::Rec(Some(box scope.introduce_type_var()),
                                      vec![TyProp::Val(symb.clone(), ty.clone())]);
             try!(unify(scope, &obj_ty, &require_ty));
 
@@ -455,7 +455,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
             for param in params.iter() {
                 param_tys.push(scope.lookup_data_var(param));
             }
-            Ok(Ty::Rec(box None,
+            Ok(Ty::Rec(None,
                        vec![TyProp::Method(Symbol::from_slice("call"), param_tys, body_ty)]))
         }
         Expr::Rec(ref props) => {
@@ -486,7 +486,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
                 }
             }
 
-            Ok(Ty::Rec(box None, prop_tys))
+            Ok(Ty::Rec(None, prop_tys))
         }
         Expr::Block(ref stmts) => {
             // Infer for each value but the last one

@@ -44,15 +44,15 @@ fn inline_type(ty: &Ty, type_vars: &HashMap<Ident, Ty>) -> Ty {
 
             }
             Ty::Rec(ref extends, ref values) => {
-                match **extends {
-                    Some(Ty::Ident(ref ident)) => {
+                match *extends {
+                    Some(box Ty::Ident(ref ident)) => {
                         if let Some(ref ty) = type_vars.get(ident) {
-                            new_value = Ty::Rec(box Some((*ty).clone()), values.clone());
+                            new_value = Ty::Rec(Some(box() (*ty).clone()), values.clone());
                         } else {
                             break;
                         }
                     }
-                    Some(Ty::Rec(ref extends2, ref values2)) => {
+                    Some(box Ty::Rec(ref extends2, ref values2)) => {
                         let new_values = values.iter().chain(values2.iter()).map(|x| x.clone());
                         new_value = Ty::Rec(extends2.clone(), new_values.collect());
                     }
@@ -84,8 +84,8 @@ fn prune_tyvars(iv: &InferValue) -> InferValue {
             Ty::Ident(ref ident) => {
                 copy(old_type_vars, type_vars, ident);
             }
-            Ty::Rec(box ref extends, ref props) => {
-                if let Some(ref ty) = *extends {
+            Ty::Rec(ref extends, ref props) => {
+                if let Some(box ref ty) = *extends {
                     handle(old_type_vars, type_vars, ty);
                 }
                 for prop in props.iter() {

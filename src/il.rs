@@ -116,7 +116,7 @@ impl fmt::Show for TyProp {
 #[deriving(Clone, PartialEq, Eq, Hash)]
 pub enum Ty {
     Ident(Ident),
-    Rec(Box<Option<Ty>>, Vec<TyProp>),
+    Rec(Option<Box<Ty>>, Vec<TyProp>),
     Union(Vec<Ty>),
 }
 
@@ -133,8 +133,8 @@ impl fmt::Show for Ty {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Ty::Ident(ref id) => write!(f, "{}", id),
-            Ty::Rec(box ref maybe_ty, ref props) => {
-                if let Some(ref ty) = *maybe_ty {
+            Ty::Rec(ref maybe_ty, ref props) => {
+                if let Some(box ref ty) = *maybe_ty {
                     try!(write!(f, "{}:{} ", ty, "{"));
                     for prop in props.iter() {
                         try!(write!(f, "{}, ", prop));

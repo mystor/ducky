@@ -346,7 +346,7 @@ fn parse_ty<'a>(st: &mut State<'a>) -> Result<Ty, String> {
             expect!(st ~ RARROW);
             let result_type = try!(parse_ty(st));
 
-            Ok(Ty::Rec(box None,
+            Ok(Ty::Rec(None,
                        vec![
                            TyProp::Method(
                                Symbol::from_slice("call"),
@@ -359,7 +359,7 @@ fn parse_ty<'a>(st: &mut State<'a>) -> Result<Ty, String> {
             let props = try!(parse_proptys(st));
             expect!(st ~ RBRACE);
 
-            Ok(Ty::Rec(box None, props))
+            Ok(Ty::Rec(None, props))
         }
         Some(&IDENT(ref id)) => {
             st.eat();
@@ -371,8 +371,8 @@ fn parse_ty<'a>(st: &mut State<'a>) -> Result<Ty, String> {
                     // Parse the base record, and then extend it
                     st.eat();
                     let record = try!(parse_ty(st));
-                    if let Ty::Rec(box None, props) = record {
-                        Ok(Ty::Rec(box Some(ident_ty), props))
+                    if let Ty::Rec(None, props) = record {
+                        Ok(Ty::Rec(Some(box ident_ty), props))
                     } else {
                         Err(format!("Unexpected non-record type!"))
                     }
