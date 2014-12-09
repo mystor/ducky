@@ -8,6 +8,8 @@ use self::MaybeOwnedEnv::*;
 #[cfg(test)]
 pub mod test;
 
+pub mod unify;
+
 #[deriving(Clone)]
 pub struct InferValue {
     pub data_vars: HashMap<Ident, Ty>,
