@@ -190,9 +190,10 @@ pub enum Expr {
     Literal(Literal),
     Ident(Ident),
     Rec(Vec<Prop>),
+
     Member(Box<Expr>, Symbol),
     Call(Box<Expr>, Symbol, Vec<Expr>),
-    Fn(Vec<Ident>, Box<Expr>),
+
     Block(Vec<Stmt>),
     If(Box<Expr>, Box<Expr>, Box<Option<Expr>>),
 }

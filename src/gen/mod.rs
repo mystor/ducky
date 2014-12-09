@@ -181,6 +181,9 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
         Expr::Member(box ref expr, ref symbol) => {
             unimplemented!()
         }
+        Expr::Call(box ref expr, ref symbol, ref args) => {
+            unimplemented!()
+        }
         // Expr::Call(ref call) => {
         //     debug!("Expr::Call");
         //     match *call {
@@ -278,99 +281,99 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
         //         _ => unimplemented!()
         //     }
         // }
-        Expr::Fn(ref params, box ref body) => {
-            debug!("Expr::Fn");
-            // @TODO: Closures! Environments! Oh my!
+        // Expr::Fn(ref params, box ref body) => {
+        //     debug!("Expr::Fn");
+        //     // @TODO: Closures! Environments! Oh my!
 
-            let void_ptr_ty = llvm::LLVMPointerType(
-                llvm::LLVMInt8TypeInContext(ctx.context),
-                0);
+        //     let void_ptr_ty = llvm::LLVMPointerType(
+        //         llvm::LLVMInt8TypeInContext(ctx.context),
+        //         0);
 
-            let mut param_tys = Vec::with_capacity(params.len() + 1);
-            param_tys.push(void_ptr_ty);
-            for _ in params.iter() { param_tys.push(void_ptr_ty) }
+        //     let mut param_tys = Vec::with_capacity(params.len() + 1);
+        //     param_tys.push(void_ptr_ty);
+        //     for _ in params.iter() { param_tys.push(void_ptr_ty) }
 
-            debug!("FnType");
-            let fn_ty = llvm::LLVMFunctionType(void_ptr_ty,
-                                               param_tys.as_slice().as_ptr(),
-                                               param_tys.len() as u32,
-                                               llvm::False);
-
-
-            debug!("FnDecl");
-            let fn_decl = llvm::LLVMAddFunction(ctx.module,
-                                                "anon_fn".to_c_str().as_ptr(),
-                                                fn_ty);
+        //     debug!("FnType");
+        //     let fn_ty = llvm::LLVMFunctionType(void_ptr_ty,
+        //                                        param_tys.as_slice().as_ptr(),
+        //                                        param_tys.len() as u32,
+        //                                        llvm::False);
 
 
-            debug!("FnBody");
-            let fn_body = llvm::LLVMAppendBasicBlockInContext(
-                ctx.context,
-                fn_decl,
-                "anon_fn_body".to_c_str().as_ptr()
-                    );
+        //     debug!("FnDecl");
+        //     let fn_decl = llvm::LLVMAddFunction(ctx.module,
+        //                                         "anon_fn".to_c_str().as_ptr(),
+        //                                         fn_ty);
 
-            debug!("GenBody");
-            {
-                // Generate the code inside of the new body
-                let new_builder = llvm::LLVMCreateBuilderInContext(ctx.context);
-                llvm::LLVMPositionBuilderAtEnd(new_builder, fn_body);
 
-                let restore = ctx.builder;
-                ctx.builder = new_builder;
+        //     debug!("FnBody");
+        //     let fn_body = llvm::LLVMAppendBasicBlockInContext(
+        //         ctx.context,
+        //         fn_decl,
+        //         "anon_fn_body".to_c_str().as_ptr()
+        //             );
 
-                let expr = try!(gen_expr(ctx, body));
+        //     debug!("GenBody");
+        //     {
+        //         // Generate the code inside of the new body
+        //         let new_builder = llvm::LLVMCreateBuilderInContext(ctx.context);
+        //         llvm::LLVMPositionBuilderAtEnd(new_builder, fn_body);
 
-                llvm::LLVMBuildRet(ctx.builder, expr);
+        //         let restore = ctx.builder;
+        //         ctx.builder = new_builder;
 
-                ctx.builder = restore;
+        //         let expr = try!(gen_expr(ctx, body));
 
-                // llvm::LLVMDisposeBuilder(new_builder);
-            }
+        //         llvm::LLVMBuildRet(ctx.builder, expr);
 
-            debug!("ClosureMake");
-            llvm::LLVMDumpModule(ctx.module);
-            let vec_ty = llvm::LLVMRustArrayType(void_ptr_ty, 3);
+        //         ctx.builder = restore;
 
-            debug!("Array type Built");
-            let closure = llvm::LLVMBuildMalloc(ctx.builder,
-                                                vec_ty,
-                                                "closure".to_c_str().as_ptr());
+        //         // llvm::LLVMDisposeBuilder(new_builder);
+        //     }
 
-            debug!("Follow _THIS_");
+        //     debug!("ClosureMake");
+        //     llvm::LLVMDumpModule(ctx.module);
+        //     let vec_ty = llvm::LLVMRustArrayType(void_ptr_ty, 3);
 
-            let follow = [llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
-                                             0,
-                                             llvm::True),
-                          llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
-                                             1,
-                                             llvm::True)];
+        //     debug!("Array type Built");
+        //     let closure = llvm::LLVMBuildMalloc(ctx.builder,
+        //                                         vec_ty,
+        //                                         "closure".to_c_str().as_ptr());
 
-            debug!("Who Builds Stores anyways?!");
-            let pointer_cast = llvm::LLVMBuildPointerCast(ctx.builder,
-                                                          fn_decl,
-                                                          void_ptr_ty,
-                                                          "closure_void".to_c_str().as_ptr());
+        //     debug!("Follow _THIS_");
 
-            let gep = llvm::LLVMBuildGEP(ctx.builder,
-                                         closure,
-                                         follow.as_ptr(),
-                                         follow.len() as u32,
-                                         "fn_ptr".to_c_str().as_ptr());
-            llvm::LLVMDumpModule(ctx.module);
-            llvm::LLVMDumpValue(pointer_cast);
-            llvm::LLVMDumpValue(gep);
+        //     let follow = [llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
+        //                                      0,
+        //                                      llvm::True),
+        //                   llvm::LLVMConstInt(llvm::LLVMInt32TypeInContext(ctx.context),
+        //                                      1,
+        //                                      llvm::True)];
 
-            debug!("With That Shit");
-            llvm::LLVMBuildStore(ctx.builder,
-                                 pointer_cast, gep
-                                 );
+        //     debug!("Who Builds Stores anyways?!");
+        //     let pointer_cast = llvm::LLVMBuildPointerCast(ctx.builder,
+        //                                                   fn_decl,
+        //                                                   void_ptr_ty,
+        //                                                   "closure_void".to_c_str().as_ptr());
 
-            debug!("WAT???W?W?");
+        //     let gep = llvm::LLVMBuildGEP(ctx.builder,
+        //                                  closure,
+        //                                  follow.as_ptr(),
+        //                                  follow.len() as u32,
+        //                                  "fn_ptr".to_c_str().as_ptr());
+        //     llvm::LLVMDumpModule(ctx.module);
+        //     llvm::LLVMDumpValue(pointer_cast);
+        //     llvm::LLVMDumpValue(gep);
 
-            llvm::LLVMDumpModule(ctx.module);
-            Ok(closure)
-        }
+        //     debug!("With That Shit");
+        //     llvm::LLVMBuildStore(ctx.builder,
+        //                          pointer_cast, gep
+        //                          );
+
+        //     debug!("WAT???W?W?");
+
+        //     llvm::LLVMDumpModule(ctx.module);
+        //     Ok(closure)
+        // }
         _ => unimplemented!()
     }
 }

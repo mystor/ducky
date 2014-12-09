@@ -233,7 +233,9 @@ fn parse_value<'a>(st: &mut State<'a>) -> Result<Expr, String> {
             expect!(st ~ RPAREN);
             let body = try!(parse_block_expr(st));
 
-            Ok(Expr::Fn(params, box body))
+            Ok(Expr::Rec(vec![
+                Prop::Method(Symbol::from_slice("call"), params, body)
+                    ]))
         }
         Some(&IF) => {
             st.eat();

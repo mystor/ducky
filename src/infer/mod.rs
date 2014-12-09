@@ -449,15 +449,6 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
 
             Ok(ty)
         }
-        Expr::Fn(ref params, ref body) => {
-            let body_ty = try!(infer_body(scope, params, &**body));
-            let mut param_tys = Vec::with_capacity(params.len());
-            for param in params.iter() {
-                param_tys.push(scope.lookup_data_var(param));
-            }
-            Ok(Ty::Rec(None,
-                       vec![TyProp::Method(Symbol::from_slice("call"), param_tys, body_ty)]))
-        }
         Expr::Rec(ref props) => {
             let self_type = scope.introduce_type_var();
 

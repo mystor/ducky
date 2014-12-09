@@ -87,28 +87,28 @@ let res = match x {
     }
 };
 "#);
-    gen::gen();
+    // gen::gen();
 
-    unsafe {
-        use rustc_llvm as llvm;
+    // unsafe {
+    //     use rustc_llvm as llvm;
 
-        let mut context = gen::GenContext::new();
-        context.enter_anon_fn();
-        let expr = gen::gen_expr(
-            &mut context,
-            &il::Expr::Call(
-                box il::Expr::Fn(vec![il::Ident::from_slice("hello")],
-                                 box il::Expr::Literal(il::Literal::Int(5))),
-                il::Symbol::from_slice("call"),
-                vec![il::Expr::Literal(il::Literal::Int(5))]));
+    //     let mut context = gen::GenContext::new();
+    //     context.enter_anon_fn();
+    //     let expr = gen::gen_expr(
+    //         &mut context,
+    //         &il::Expr::Call(
+    //             box il::Expr::Fn(vec![il::Ident::from_slice("hello")],
+    //                              box il::Expr::Literal(il::Literal::Int(5))),
+    //             il::Symbol::from_slice("call"),
+    //             vec![il::Expr::Literal(il::Literal::Int(5))]));
 
 
-        if let Ok(expr) = expr {
-            llvm::LLVMDumpValue(expr);
-        }
+    //     if let Ok(expr) = expr {
+    //         llvm::LLVMDumpValue(expr);
+    //     }
 
-        context.dump();
-        context.pass();
-        context.dump();
-    }
+    //     context.dump();
+    //     context.pass();
+    //     context.dump();
+    // }
 }
