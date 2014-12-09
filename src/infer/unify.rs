@@ -168,6 +168,8 @@ pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
             }
         }
         (&Ty::Union(_), &Ty::Rec(_, _)) => {
+            // This simply delegates to the above branch.
+            // It doesn't do it in the most efficient way, but that is OK
             unify(scope, &b, &a)
         }
         (&Ty::Union(ref aopts), &Ty::Union(ref bopts)) => {
