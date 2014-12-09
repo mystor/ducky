@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use infer::Scope;
+use infer::env::Scope;
 use il::*;
 
 fn unify_props(scope: &mut Scope, a: &TyProp, b: &TyProp) -> Result<(), String> {
@@ -75,6 +75,14 @@ fn std_form(scope: &mut Scope, ty: Ty) -> Ty {
 }
 
 pub fn unify(scope: &mut Scope, a: &Ty, b: &Ty) -> Result<(), String> {
+    let ty_pairs = (a.clone(), b.clone());
+    if scope.unified.contains(&(a.clone(), b.clone())) {
+        return Ok(());
+    } else {
+        // If they haven't been unified before, assume that they have!
+        scope.unified.insert(ty_pairs);
+    }
+
     // Types in this language are very simple, they all take the form of records, or
     // unions of records. Which is going to be nice for us.
     // We need to first reduce both type a and type b to standard form, and then
