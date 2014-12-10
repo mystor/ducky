@@ -46,7 +46,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
             // The object must have the method with the correct type. UNIFY!
             let require_ty = Ty::Rec(Some(box scope.introduce_type_var()),
                                      vec![TyProp::Method(symb.clone(), param_tys, res.clone())]);
-            try!(unify::unify(scope, &obj_ty, &require_ty));
+            try!(unify::unify(&mut **scope, &obj_ty, &require_ty));
             Ok(res)
         }
         Expr::Member(ref obj, ref symb) => {
@@ -56,7 +56,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
 
             let require_ty = Ty::Rec(Some(box scope.introduce_type_var()),
                                      vec![TyProp::Val(symb.clone(), ty.clone())]);
-            try!(unify::unify(scope, &obj_ty, &require_ty));
+            try!(unify::unify(&mut **scope, &obj_ty, &require_ty));
 
             Ok(ty)
         }
@@ -75,7 +75,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
                         // Unify the first variable's type with self_type
                         // TODO: Do this at the end?
                         let first_type = scope.lookup_data_var(&params[0]);
-                        try!(unify::unify(scope, &first_type, &self_type));
+                        try!(unify::unify(&mut **scope, &first_type, &self_type));
 
                         let body_ty = try!(infer_body(scope, params, body));
                         let mut param_tys = Vec::with_capacity(params.len());
@@ -111,7 +111,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
         Expr::If(box ref cond, box ref thn, box ref els) => {
             // Infer the type of the condition, and ensure it is Bool
             let cond_ty = try!(infer_expr(scope, cond));
-            try!(unify::unify(scope, &cond_ty, &Ty::Ident(Ident(Atom::from_slice("Bool"), BuiltIn))));
+            try!(unify::unify(&mut **scope, &cond_ty, &Ty::Ident(Ident(Atom::from_slice("Bool"), BuiltIn))));
 
             // Infer the type of the different branches
             let thn_ty = try!(infer_expr(scope, thn));
@@ -123,7 +123,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
 
             // Both branches currently need to return the same type. We hope to
             // change that at some point by introducing sum types! Woo!
-            try!(unify::unify(scope, &thn_ty, &els_ty));
+            try!(unify::unify(&mut **scope, &thn_ty, &els_ty));
 
             Ok(thn_ty)
         }
@@ -140,7 +140,7 @@ pub fn infer_stmt(scope: &mut Scope, stmt: &Stmt) -> Result<(), String> {
             let ty = try!(infer_expr(scope, expr));
             // TODO: Better error message on failure
             let ident = scope.lookup_data_var(ident);
-            unify::unify(scope, &ident, &ty)
+            unify::unify(&mut **scope, &ident, &ty)
         }
         Stmt::Empty => Ok(())
     }

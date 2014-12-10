@@ -36,8 +36,8 @@ pub struct Environment {
 
 impl Environment {
     // Accessors for the data from the environment
-    pub fn lookup_type_var(&self, id: &Ident) -> Option<Ty> {
-        self.type_vars.get(id).map(|x| { x.clone() })
+    pub fn lookup_type_var(&self, id: &Ident) -> Option<&Ty> {
+        self.type_vars.get(id)
     }
 
     pub fn lookup_data_var(&mut self, id: &Ident) -> Ty {
@@ -155,7 +155,7 @@ impl <'a>Scope<'a> {
                     let ty_var = self.introduce_type_var();
                     mappings.insert(id.clone(), ty_var.clone());
 
-                    if let Some(ref ty) = self.lookup_type_var(id) {
+                    if let Some(ref ty) = self.lookup_type_var(id).map(|x| x.clone()) {
                         // Instantiate the type which is being pointed to
                         let instantiated = self.instantiate(ty, mappings);
 
