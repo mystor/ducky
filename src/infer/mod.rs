@@ -123,9 +123,9 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
 
             // Both branches currently need to return the same type. We hope to
             // change that at some point by introducing sum types! Woo!
-            try!(unify::unify(&mut **scope, &thn_ty, &els_ty));
+            // try!(unify::unify(&mut **scope, &thn_ty, &els_ty));
 
-            Ok(thn_ty)
+            Ok(Ty::Union(vec![thn_ty, els_ty]))
         }
     }
 }

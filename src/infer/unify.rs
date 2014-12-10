@@ -192,34 +192,31 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
             Ok(())
         }
         (&Ty::Rec(ref extends, ref props), &Ty::Union(ref opts)) => {
-            let nopts = opts.iter().map(|opt| {
-                // Unify the record with every option
-                try!(_unify(stage, opt, &Ty::Rec(extends.clone(), props.clone())));
-
-                // Get this option back into standard form
-                let std_opt = std_form(stage, opt.clone());
-
-                // Remove any duplicate properties
-                if let Ty::Rec(ref oextends, ref oprops) = std_opt {
-                    Ok(Ty::Rec(
-                        oextends.clone(),
-                        oprops.iter().filter_map(|x| {
-                            if props.iter().all(|y| y.symbol() != x.symbol()) {
-                                Some(x.clone())
-                            } else { None }
-                        }).collect()))
-                } else {
-                    panic!("Invariant Exception: after unifying with record, not record");
-                }
-            }).collect();
-
+            // We can't unify a concrete record with a union, so let's not even try!
             if let Some(ref extends) = *extends {
+                let nopts = opts.iter().map(|opt| {
+                    // Unify every element in the union with the record, and record what
+                    // substitution would be performed. This is done by creating a tyvar
+                    // which the substitution will occur with.
+                    //
+                    // TODO: I'm pretty sure that this doesn't cover all cases, because
+                    // the properties in the record may incorrectly unify. I'll try to fix
+                    // that when I come up with a failing test case for it!
+                    let nextends = stage.introduce_type_var();
+
+                    try!(_unify(stage, opt,
+                                &Ty::Rec(Some(box nextends.clone()), props.clone())));
+
+                    Ok(nextends)
+                }).collect();
+
                 stage.substitute(
                     extends.unwrap_ident(),
                     Ty::Union(try!(nopts)));
+
                 Ok(())
             } else {
-                Err(format!("Fuuuuuuu"))
+                Err(format!("Cannot unify concrete record {} with union {}", a, b))
             }
         }
         (&Ty::Union(_), &Ty::Rec(_, _)) => {

@@ -118,6 +118,12 @@ fn homogenous_if() {
         }
     });
 
+    infer_ok(stringify!{
+        let f = fn(x) {
+            if x { {a: 2, b: 2} } else { {a: 3, b: 2} }.a
+        }
+    });
+
     infer_err(stringify!{
         let f = fn(x) {
             if x { {a: 2} } else { {a: 3} } + 1
