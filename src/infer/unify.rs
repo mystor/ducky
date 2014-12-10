@@ -3,8 +3,36 @@ use std::collections::{HashMap, HashSet};
 use infer::env::Environment;
 use il::*;
 
+enum Parent<'a> {
+    Env(&'a mut Environment),
+    Stage(&'a mut Stage<'a>),
+}
+
+impl <'a> Parent<'a> {
+    fn substitute(&mut self, a: Ident, b: Ty) {
+        match *self {
+            Parent::Env(ref mut env) => env.substitute(a, b),
+            Parent::Stage(ref mut stage) => stage.substitute(a, b),
+        }
+    }
+
+    fn lookup_type_var(&self, id: &Ident) -> Option<&Ty> {
+        match *self {
+            Parent::Env(ref env) => env.lookup_type_var(id),
+            Parent::Stage(ref stage) => stage.lookup_type_var(id),
+        }
+    }
+
+    fn introduce_type_var(&mut self) -> Ty {
+        match *self {
+            Parent::Env(ref mut env) => env.introduce_type_var(),
+            Parent::Stage(ref mut stage) => stage.introduce_type_var(),
+        }
+    }
+}
+
 struct Stage<'a> {
-    env: &'a mut Environment,
+    env: Parent<'a>,
     subs: HashMap<Ident, Ty>,
     unified: HashSet<(Ty, Ty)>,
 }
@@ -12,7 +40,7 @@ struct Stage<'a> {
 impl <'a> Stage<'a> {
     fn new<'a>(env: &'a mut Environment) -> Stage<'a> {
         Stage{
-            env: env,
+            env: Parent::Env(env),
             subs: HashMap::new(),
             unified: HashSet::new(),
         }
@@ -20,13 +48,13 @@ impl <'a> Stage<'a> {
 
     fn child(&'a mut self) -> Stage<'a> {
         Stage{
-            env: self.env,
-            subs: self.subs.clone(),
-            unified: self.unified.clone(),
+            env: Parent::Stage(self),
+            subs: HashMap::new(),
+            unified: HashSet::new(),
         }
     }
 
-    fn apply(self) {
+    fn apply(mut self) {
         for (id, ty) in self.subs.into_iter() {
             self.env.substitute(id.clone(), ty.clone());
         }
@@ -43,6 +71,51 @@ impl <'a> Stage<'a> {
     fn introduce_type_var(&mut self) -> Ty {
         self.env.introduce_type_var()
     }
+}
+
+fn free_vars<'a>(stage: &mut Stage<'a>, ty: &Ty, checked: &mut HashSet<Ty>) -> HashSet<Ident> {
+    let mut idents = HashSet::new();
+    if checked.contains(ty) { return idents } else { checked.insert(ty.clone()); }
+
+    debug!("ty: {}", ty);
+
+    match *ty {
+        Ty::Ident(ref id) => {
+            if let Some(ty) = stage.lookup_type_var(id).cloned() {
+                return free_vars(stage, &ty.clone(), checked)
+            } else {
+                idents.insert(id.clone());
+            }
+        }
+        Ty::Rec(ref extends, ref props) => {
+            if let Some(box ref extends) = *extends {
+                idents.extend(free_vars(stage, extends, checked).iter().cloned());
+            }
+
+            for prop in props.iter() {
+                match *prop {
+                    TyProp::Val(_, ref ty) => {
+                        idents.extend(free_vars(stage, ty, checked).iter().cloned());
+                    }
+                    TyProp::Method(_, ref args, ref res) => {
+                        for arg in args.iter() {
+                            idents.extend(free_vars(stage, arg, checked).iter().cloned());
+                        }
+                        idents.extend(free_vars(stage, res, checked).iter().cloned());
+                    }
+                }
+            }
+        }
+        Ty::Union(ref opts) => {
+            let mut idents = HashSet::new();
+
+            for opt in opts.iter() {
+                idents.extend(free_vars(stage, opt, checked).iter().cloned());
+            }
+        }
+    }
+
+    idents
 }
 
 fn unify_props<'a>(stage: &mut Stage<'a>, a: &TyProp, b: &TyProp) -> Result<(), String> {
@@ -94,12 +167,14 @@ fn std_form<'a>(stage: &Stage<'a>, ty: Ty) -> Ty {
                     }
                     Ty::Union(ref opts) => {
                         // Add props to every option!
-                        let opts = opts.iter().map(|opt| {
+                        let opts: Vec<Ty> = opts.iter().map(|opt| {
                             std_form(stage,
                                      Ty::Rec(Some(box opt.clone()), props.clone()))
                         }).collect();
 
-                        // TODO: Expand inner unions! (may be unnecessary here)
+                        // None of these should be unions, so we don't have to
+                        // expand any inner unions (let's make sure!)
+                        assert!(opts.iter().all(|x: &Ty| ! x.is_union()));
 
                         Ty::Union(opts)
                     }
@@ -108,9 +183,18 @@ fn std_form<'a>(stage: &Stage<'a>, ty: Ty) -> Ty {
         }
         Ty::Union(ref opts) => {
             let opts = opts.iter().map(|opt| {
+                // Convert every property into standard form!
                 std_form(stage, opt.clone())
-            }).collect();
-            // TODO: Expand inner unions!
+            }).fold(Vec::new(), |mut vec, opt| {
+                // Pull in any unions which exist while transforming into a Vec
+                if let Ty::Union(ref opts) = opt {
+                    vec.push_all(opts.as_slice());
+                } else {
+                    vec.push(opt);
+                }
+
+                vec
+            });
 
             Ty::Union(opts)
         }
@@ -191,33 +275,50 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
 
             Ok(())
         }
-        (&Ty::Rec(ref extends, ref props), &Ty::Union(ref opts)) => {
+        (&Ty::Rec(_, _), &Ty::Union(ref opts)) => {
             // We can't unify a concrete record with a union, so let's not even try!
-            if let Some(ref extends) = *extends {
-                let nopts = opts.iter().map(|opt| {
-                    // Unify every element in the union with the record, and record what
-                    // substitution would be performed. This is done by creating a tyvar
-                    // which the substitution will occur with.
-                    //
-                    // TODO: I'm pretty sure that this doesn't cover all cases, because
-                    // the properties in the record may incorrectly unify. I'll try to fix
-                    // that when I come up with a failing test case for it!
-                    let nextends = stage.introduce_type_var();
+            let mut subs: HashMap<Ident, Vec<Ty>> = HashMap::new();
 
-                    try!(_unify(stage, opt,
-                                &Ty::Rec(Some(box nextends.clone()), props.clone())));
+            for opt in opts.iter() {
+                // These are the free variables in opt
+                // Actually whoops...
+                let free = free_vars(stage, opt, &mut HashSet::new());
 
-                    Ok(nextends)
-                }).collect();
+                // Unify with the option in a child_stage
+                let mut child_stage = stage.child();
 
-                stage.substitute(
-                    extends.unwrap_ident(),
-                    Ty::Union(try!(nopts)));
+                try!(_unify(&mut child_stage, opt, &a));
 
-                Ok(())
-            } else {
-                Err(format!("Cannot unify concrete record {} with union {}", a, b))
+                // Localsubs records all of the entries which are free in opt
+                let mut localsubs = HashMap::new();
+                for (id, ty) in child_stage.subs.iter() {
+                    if ! free.contains(id) {
+                        if let Some(lst) = subs.get_mut(id) {
+                            lst.push(ty.clone());
+                            continue
+                        }
+
+                        subs.insert(id.clone(), vec![ty.clone()]);
+                    } else {
+                        localsubs.insert(id.clone(), ty.clone());
+                    }
+                }
+
+                // Modify the child_stage to have those values be free in opt
+                child_stage.subs = localsubs;
+
+                // TODO: We need to make this only apply up one level, rather than all of the way to the top
+                // also, we need to not copy everything. Basically, I need to rewrite the way that stages work
+                // It'll be fun!
+                // Merge these subs up one level into stage!
+                child_stage.apply();
             }
+
+            for (id, tys) in subs.iter() {
+                try!(_unify(stage, &Ty::Ident(id.clone()), &Ty::Union(tys.clone())));
+            }
+
+            Ok(())
         }
         (&Ty::Union(_), &Ty::Rec(_, _)) => {
             // This simply delegates to the above branch.

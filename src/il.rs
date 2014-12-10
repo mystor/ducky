@@ -127,6 +127,18 @@ impl Ty {
             _ => panic!("ICE: Couldn't Unwrap Identifier"),
         }
     }
+
+    pub fn is_ident(&self) -> bool {
+        if let Ty::Ident(..) = *self { true } else { false }
+    }
+
+    pub fn is_rec(&self) -> bool {
+        if let Ty::Rec(..) = *self { true } else { false }
+    }
+
+    pub fn is_union(&self) -> bool {
+        if let Ty::Union(..) = *self { true } else { false }
+    }
 }
 
 impl fmt::Show for Ty {

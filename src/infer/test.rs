@@ -172,3 +172,34 @@ fn non_homogenous_if() {
         }
     });
 }
+
+#[test]
+fn nested_non_homo_if() {
+    infer_ok(stringify!{
+        let f = fn(x, y) {
+            if x {
+                if y {
+                    { a: 3, b: 4 }
+                } else {
+                    { a: {}, b: 10 }
+                }
+            } else {
+                { a: {}, c: 10 }
+            }.a // We should be able to access the a property
+        }
+    });
+
+    infer_err(stringify!{
+        let f = fn(x, y) {
+            if x {
+                if y {
+                    { a: 3, b: 4 }
+                } else {
+                    { a: {}, b: 10 }
+                }
+            } else {
+                { a: {}, c: 10 }
+            }.a + 5 // But we can't add to it, because it might be a non-integer!
+        }
+    });
+}
