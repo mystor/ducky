@@ -164,12 +164,16 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
                 try!(unify_props(stage, aprop, bprop));
             }
 
-            let common_free = stage.introduce_type_var();
+            let common_free = if aextends.is_none() || bextends.is_none() {
+                None
+            } else {
+                Some(box stage.introduce_type_var())
+            };
 
             if let Some(box Ty::Ident(ref ident)) = *bextends {
                 // We need to unify bextends with something
                 stage.substitute(ident.clone(),
-                                 Ty::Rec(Some(box common_free.clone()),
+                                 Ty::Rec(common_free.clone(),
                                          only_a.values().map(|x| (**x).clone()).collect()));
             } else if ! only_a.is_empty() {
                 return Err(format!("Cannot unify {} and {}", a, b));
@@ -179,7 +183,7 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
             if let Some(box Ty::Ident(ref ident)) = *aextends {
                 // We need to unify bextends with something
                 stage.substitute(ident.clone(),
-                                 Ty::Rec(Some(box common_free.clone()),
+                                 Ty::Rec(common_free.clone(),
                                          only_b.values().map(|x| (**x).clone()).collect()));
             } else if ! only_b.is_empty() {
                 return Err(format!("Cannot unify {} and {}", a, b));
@@ -333,6 +337,12 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
 pub fn unify<'a>(env: &mut Environment, a: &Ty, b: &Ty) -> Result<(), String> {
     let mut stage = Stage::new(env);
     try!(_unify(&mut stage, a, b));
+
+    // Let's test whether we unified successfully!
+    // This doesn't work all of the time, but helped me catch a bug!
+    // I need to actually write a function to test type equivalences.
+    // assert_eq!(std_form(&stage, a.clone()), std_form(&stage, b.clone()));
+
     stage.apply();
     Ok(())
 }
