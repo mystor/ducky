@@ -363,12 +363,8 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
 
 pub fn unify<'a>(env: &mut (Env + 'a), a: &Ty, b: &Ty) -> Result<(), String> {
     let mut stage = Stage::new(env);
-    try!(_unify(&mut stage, a, b));
 
-    // Let's test whether we unified successfully!
-    // This doesn't work all of the time, but helped me catch a bug!
-    // I need to actually write a function to test type equivalences.
-    // assert_eq!(std_form(&stage, a.clone()), std_form(&stage, b.clone()));
+    try!(_unify(&mut stage, a, b));
 
     stage.apply();
     Ok(())

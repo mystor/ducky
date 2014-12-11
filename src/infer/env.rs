@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use string_cache::Atom;
 use il::*;
+use infer::util::free_vars;
 use infer::InferValue;
 
 /// A struct implementing Env has access to a set of type_vars.
@@ -27,14 +28,14 @@ struct Environment {
 #[deriving(Show)]
 enum MOE<'a> {
     Owned(Environment),
-    Shared(&'a mut Environment),
+    Shared(&'a mut Scope<'a>),
 }
 
 impl <'a> Deref<Environment> for MOE<'a> {
     fn deref<'a>(&'a self) -> &'a Environment {
         match *self {
             MOE::Owned(ref env) => env,
-            MOE::Shared(ref env) => &**env,
+            MOE::Shared(ref scope) => scope.env.deref(),
         }
     }
 }
@@ -43,7 +44,7 @@ impl <'a> DerefMut<Environment> for MOE<'a> {
     fn deref_mut<'a>(&'a mut self) -> &'a mut Environment {
         match *self {
             MOE::Owned(ref mut env) => env,
-            MOE::Shared(ref mut env) => &mut **env,
+            MOE::Shared(ref mut scope) => scope.env.deref_mut(),
         }
     }
 }
@@ -51,7 +52,7 @@ impl <'a> DerefMut<Environment> for MOE<'a> {
 #[deriving(Show)]
 pub struct Scope<'a> {
     env: MOE<'a>,
-    bound_type_vars: HashSet<Ident>,
+    bound_vars: HashSet<Ident>,
 }
 
 impl <'a>Scope<'a> {
@@ -76,14 +77,27 @@ impl <'a>Scope<'a> {
                 data_vars: HashMap::new(),
                 counter: 0,
             }),
-            bound_type_vars: HashSet::new(),
+            bound_vars: HashSet::new(),
         }
     }
-    pub fn new_child<'b>(&'b mut self, bound_type_vars: HashSet<Ident>) -> Scope<'b> {
+
+    pub fn new_child<'b: 'a>(&'b mut self, bound_vars: HashSet<Ident>) -> Scope<'b> {
+        // Also add all free variables in the bound vars to the list of bound vars!
+        let bvs = bound_vars.iter().fold(HashSet::new(), |mut v, bv| {
+            v.extend(free_vars(self, &Ty::Ident(bv.clone())).iter().cloned());
+            v
+        });
+
         Scope{
-            env: MOE::Shared(self.env.deref_mut()),
-            bound_type_vars: (self.bound_type_vars.clone().into_iter()
-                              .chain(bound_type_vars.into_iter()).collect())
+            env: MOE::Shared(self),
+            bound_vars: bvs,
+        }
+    }
+
+    fn is_bound(&self, var: &Ident) -> bool {
+        self.bound_vars.contains(var) || match self.env {
+            MOE::Shared(ref parent) => parent.is_bound(var),
+            _ => false,
         }
     }
 
@@ -91,11 +105,10 @@ impl <'a>Scope<'a> {
         match *ty {
             Ty::Ident(ref id) => {
                 if let Some(ty) = mappings.get(id) {
-                    // Check if this identifier has already been looked up in the mappings
+                    // It's been handled already, just go with it!
                     return ty.clone()
-                }
-
-                if self.bound_type_vars.contains(id) {
+                } /* else */
+                if self.is_bound(id) {
                     // Bound type vars are explicitly not initialized
                     ty.clone()
                 } else {
@@ -103,14 +116,12 @@ impl <'a>Scope<'a> {
                     let ty_var = self.introduce_type_var();
                     mappings.insert(id.clone(), ty_var.clone());
 
-                    if let Some(ref ty) = self.lookup_type_var(id).map(|x| x.clone()) {
+                    if let Some(ty) = self.lookup_type_var(id).cloned() {
                         // Instantiate the type which is being pointed to
-                        let instantiated = self.instantiate(ty, mappings);
+                        let instantiated = self.instantiate(&ty, mappings);
 
                         // Make the ty_var point to the instantiated type
-                        self.substitute(
-                            ty_var.unwrap_ident(),
-                            instantiated);
+                        self.substitute(ty_var.unwrap_ident(), instantiated);
                     }
 
                     ty_var
@@ -149,6 +160,17 @@ impl <'a>Scope<'a> {
             type_vars: self.env.type_vars.clone(),
         }
     }
+
+    fn maybe_bind(&mut self, id: &Ident, maybe_binds: &[Ident]) {
+        if self.bound_vars.contains(id) {
+            self.bound_vars.extend(maybe_binds.iter().cloned());
+        } else {
+            match self.env {
+                MOE::Shared(ref mut scope) => scope.maybe_bind(id, maybe_binds),
+                _ => panic!(),
+            }
+        }
+    }
 }
 
 impl <'a> Env for Scope<'a> {
@@ -179,7 +201,20 @@ impl <'a> Env for Scope<'a> {
     // Perform a substitution (bind the type variable id)
     // id _must_ be unbound at the point of substitution
     fn substitute(&mut self, id: Ident, ty: Ty) {
-        let prev = self.env.type_vars.insert(id, ty);
+        // Substitute the type variable
+        let prev = self.env.type_vars.insert(id.clone(), ty.clone());
+
+        if self.is_bound(&id) {
+            // Determine what new variables have to be bound
+            let free = free_vars(self, &ty);
+            let newly_bound: Vec<_> = free.iter().filter(|x| {
+                ! self.is_bound(*x)
+            }).cloned().collect();
+
+            self.maybe_bind(&id, newly_bound.as_slice());
+        }
+
         assert!(prev.is_none());
     }
+
 }

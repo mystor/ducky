@@ -10,8 +10,6 @@ fn _free_vars<'a>(stage: &mut (Env + 'a), ty: &Ty, checked: &mut HashSet<Ty>) ->
     let mut idents = HashSet::new();
     if checked.contains(ty) { return idents } else { checked.insert(ty.clone()); }
 
-    debug!("ty: {}", ty);
-
     match *ty {
         Ty::Ident(ref id) => {
             if let Some(ty) = stage.lookup_type_var(id).cloned() {

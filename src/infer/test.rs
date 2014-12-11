@@ -14,9 +14,9 @@ fn infer_code(code: &str) -> Result<infer::InferValue, String> {
 /// Asserts that there was an error when typechecking the given code
 fn infer_err(code: &str) {
     match infer_code(code) {
-        Ok(_) => {
-            // TODO: Actually display the incorrect types
-            panic!("\nUnexpected success inferring types for code:\n\n{}\n", code);
+        Ok(istate) => {
+            // TODO: Maybe simplify the types before displaying them?
+            panic!("\nUnexpected success inferring types for code:\n\n{}\n\n{}\n", code, istate);
         }
         Err(_) => {}
     }
