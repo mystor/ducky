@@ -1,77 +1,26 @@
-use std::fmt;
 use std::collections::{HashMap, HashSet};
 use string_cache::Atom;
 use il::*;
+use infer::InferValue;
 
-#[deriving(Clone)]
-pub struct InferValue {
-    pub data_vars: HashMap<Ident, Ty>,
-    pub type_vars: HashMap<Ident, Ty>,
-}
+/// A struct implementing Env has access to a set of type_vars.
+/// At some point, Env will probably be extended to include most
+/// of the functionality of Environment and Scope.
+pub trait Env {
+    fn lookup_type_var(&self, id: &Ident) -> Option<&Ty>;
 
-impl fmt::Show for InferValue {
-    fn fmt<'a>(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(write!(f, "{{\n"));
-        try!(write!(f, "  data_vars: {{\n"));
-        for (id, ty) in self.data_vars.iter() {
-            try!(write!(f, "    {:10}: {}\n", format!("{}", id), ty));
-        }
-        try!(write!(f, "  }}\n"));
-        try!(write!(f, "  type_vars: {{\n"));
-        for (id, ty) in self.type_vars.iter() {
-            try!(write!(f, "    {:10}: {}\n", format!("{}", id), ty));
-        }
-        try!(write!(f, "  }}\n"));
-        write!(f, "}}")
-    }
+    fn lookup_data_var(&mut self, id: &Ident) -> Ty;
+
+    fn introduce_type_var(&mut self) -> Ty;
+
+    fn substitute(&mut self, id: Ident, ty: Ty);
 }
 
 #[deriving(Show, Clone)]
-pub struct Environment {
-    pub data_vars: HashMap<Ident, Ty>,
-    pub type_vars: HashMap<Ident, Ty>,
-    pub unified: HashSet<(Ty, Ty)>,
+struct Environment {
+    data_vars: HashMap<Ident, Ty>,
+    type_vars: HashMap<Ident, Ty>,
     counter: uint,
-}
-
-impl Environment {
-    // Accessors for the data from the environment
-    pub fn lookup_type_var(&self, id: &Ident) -> Option<&Ty> {
-        self.type_vars.get(id)
-    }
-
-    pub fn lookup_data_var(&mut self, id: &Ident) -> Ty {
-        if let Some(ty) = self.data_vars.get(id) {
-            return ty.clone();
-        }
-
-        let ty = self.introduce_type_var();
-        self.data_vars.insert(id.clone(), ty.clone());
-        ty
-    }
-
-    // Creating a unique type variable
-    pub fn introduce_type_var(&mut self) -> Ty {
-        // TODO: Currently these names are awful
-        let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-        let id = chars.slice_chars(self.counter % chars.len(), self.counter % chars.len() + 1);
-        self.counter += 1;
-
-        Ty::Ident(Ident(Atom::from_slice(id), Internal(self.counter)))
-    }
-
-    // Perform a substitution (bind the type variable id)
-    pub fn substitute(&mut self, id: Ident, ty: Ty) {
-        self.type_vars.insert(id, ty);
-    }
-
-    // Produce an InferValue
-    pub fn as_infervalue(&self) -> InferValue {
-        InferValue {
-            data_vars: self.data_vars.clone(),
-            type_vars: self.type_vars.clone(),
-        }
-    }
 }
 
 // TODO: This can probably be merged into the Scope<'a> Struct
@@ -125,7 +74,6 @@ impl <'a>Scope<'a> {
             env: MOE::Owned(Environment{
                 type_vars: type_vars,
                 data_vars: HashMap::new(),
-                unified: HashSet::new(),
                 counter: 0,
             }),
             bound_type_vars: HashSet::new(),
@@ -170,10 +118,7 @@ impl <'a>Scope<'a> {
             }
             Ty::Rec(ref extends, ref props) => {
                 // Instantiate all of the properties!
-                let extends = match *extends { // @TODO: Why can't I .map()?
-                    Some(box ref extends) => Some(box self.instantiate(extends, mappings)),
-                    None => None,
-                };
+                let extends = extends.as_ref().map(|x| box self.instantiate(&**x, mappings));
 
                 let props = props.iter().map(|prop| {
                     match *prop {
@@ -181,9 +126,7 @@ impl <'a>Scope<'a> {
                             TyProp::Val(symb.clone(), self.instantiate(ty, mappings))
                         }
                         TyProp::Method(ref symb, ref args, ref res) => {
-                            let nargs = args.iter().map(|x| {
-                                self.instantiate(x, mappings)
-                            }).collect();
+                            let nargs = args.iter().map(|x| self.instantiate(x, mappings)).collect();
                             let nres = self.instantiate(res, mappings);
                             TyProp::Method(symb.clone(), nargs, nres)
                         }
@@ -198,16 +141,45 @@ impl <'a>Scope<'a> {
             }
         }
     }
-}
 
-impl <'a> DerefMut<Environment> for Scope<'a> {
-    fn deref_mut<'a>(&'a mut self) -> &'a mut Environment {
-        self.env.deref_mut()
+    pub fn as_infervalue(&self) -> InferValue {
+        // TODO: Remove
+        InferValue{
+            data_vars: self.env.data_vars.clone(),
+            type_vars: self.env.type_vars.clone(),
+        }
     }
 }
 
-impl <'a> Deref<Environment> for Scope<'a> {
-    fn deref<'a>(&'a self) -> &'a Environment {
-        self.env.deref()
+impl <'a> Env for Scope<'a> {
+    fn lookup_type_var(&self, id: &Ident) -> Option<&Ty> {
+        self.env.type_vars.get(id)
+    }
+
+    fn lookup_data_var(&mut self, id: &Ident) -> Ty {
+        if let Some(ty) = self.env.data_vars.get(id) {
+            return ty.clone();
+        }
+
+        let ty = self.introduce_type_var();
+        self.env.data_vars.insert(id.clone(), ty.clone());
+        ty
+    }
+
+    // Creating a unique type variable
+    fn introduce_type_var(&mut self) -> Ty {
+        // TODO: Currently these names are awful
+        let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        let id = chars.slice_chars(self.env.counter % chars.len(), self.env.counter % chars.len() + 1);
+        self.env.counter += 1;
+
+        Ty::Ident(Ident(Atom::from_slice(id), Internal(self.env.counter)))
+    }
+
+    // Perform a substitution (bind the type variable id)
+    // id _must_ be unbound at the point of substitution
+    fn substitute(&mut self, id: Ident, ty: Ty) {
+        let prev = self.env.type_vars.insert(id, ty);
+        assert!(prev.is_none());
     }
 }

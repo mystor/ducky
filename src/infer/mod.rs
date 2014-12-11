@@ -1,14 +1,39 @@
-use string_cache::Atom;
+use std::fmt;
 use std::collections::HashMap;
+use string_cache::Atom;
 use il::*;
-use self::env::Scope;
-pub use self::env::InferValue;
+use self::env::{Scope, Env};
 
+mod util;
 mod env;
 mod unify;
 
 #[cfg(test)]
 mod test;
+
+#[deriving(Clone)]
+pub struct InferValue {
+    pub data_vars: HashMap<Ident, Ty>,
+    pub type_vars: HashMap<Ident, Ty>,
+}
+
+impl fmt::Show for InferValue {
+    fn fmt<'a>(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        try!(write!(f, "{{\n"));
+        try!(write!(f, "  data_vars: {{\n"));
+        for (id, ty) in self.data_vars.iter() {
+            try!(write!(f, "    {:10}: {}\n", format!("{}", id), ty));
+        }
+        try!(write!(f, "  }}\n"));
+        try!(write!(f, "  type_vars: {{\n"));
+        for (id, ty) in self.type_vars.iter() {
+            try!(write!(f, "    {:10}: {}\n", format!("{}", id), ty));
+        }
+        try!(write!(f, "  }}\n"));
+        write!(f, "}}")
+    }
+}
+
 
 fn infer_body(scope: &mut Scope, params: &Vec<Ident>, body: &Expr) -> Result<Ty, String> {
     let bound = { // Determine the list of variables which should be bound
@@ -46,7 +71,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
             // The object must have the method with the correct type. UNIFY!
             let require_ty = Ty::Rec(Some(box scope.introduce_type_var()),
                                      vec![TyProp::Method(symb.clone(), param_tys, res.clone())]);
-            try!(unify::unify(&mut **scope, &obj_ty, &require_ty));
+            try!(unify::unify(scope, &obj_ty, &require_ty));
             Ok(res)
         }
         Expr::Member(ref obj, ref symb) => {
@@ -56,7 +81,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
 
             let require_ty = Ty::Rec(Some(box scope.introduce_type_var()),
                                      vec![TyProp::Val(symb.clone(), ty.clone())]);
-            try!(unify::unify(&mut **scope, &obj_ty, &require_ty));
+            try!(unify::unify(scope, &obj_ty, &require_ty));
 
             Ok(ty)
         }
@@ -75,7 +100,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
                         // Unify the first variable's type with self_type
                         // TODO: Do this at the end?
                         let first_type = scope.lookup_data_var(&params[0]);
-                        try!(unify::unify(&mut **scope, &first_type, &self_type));
+                        try!(unify::unify(scope, &first_type, &self_type));
 
                         let body_ty = try!(infer_body(scope, params, body));
                         let mut param_tys = Vec::with_capacity(params.len());
@@ -111,7 +136,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
         Expr::If(box ref cond, box ref thn, box ref els) => {
             // Infer the type of the condition, and ensure it is Bool
             let cond_ty = try!(infer_expr(scope, cond));
-            try!(unify::unify(&mut **scope, &cond_ty, &Ty::Ident(Ident(Atom::from_slice("Bool"), BuiltIn))));
+            try!(unify::unify(scope, &cond_ty, &Ty::Ident(Ident(Atom::from_slice("Bool"), BuiltIn))));
 
             // Infer the type of the different branches
             let thn_ty = try!(infer_expr(scope, thn));
@@ -140,7 +165,7 @@ pub fn infer_stmt(scope: &mut Scope, stmt: &Stmt) -> Result<(), String> {
             let ty = try!(infer_expr(scope, expr));
             // TODO: Better error message on failure
             let ident = scope.lookup_data_var(ident);
-            unify::unify(&mut **scope, &ident, &ty)
+            unify::unify(scope, &ident, &ty)
         }
         Stmt::Empty => Ok(())
     }

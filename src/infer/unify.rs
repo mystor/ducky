@@ -1,54 +1,22 @@
 use std::vec::Vec;
 use std::collections::{HashMap, HashSet};
-use infer::env::Environment;
+use infer::util::free_vars;
+use infer::env::Env;
 use il::*;
 
-enum Parent<'a> {
-    Env(&'a mut Environment),
-    Stage(&'a mut Stage<'a>),
-}
-
-impl <'a> Parent<'a> {
-    fn substitute(&mut self, a: Ident, b: Ty) {
-        match *self {
-            Parent::Env(ref mut env) => env.substitute(a, b),
-            Parent::Stage(ref mut stage) => stage.substitute(a, b),
-        }
-    }
-
-    fn lookup_type_var(&self, id: &Ident) -> Option<&Ty> {
-        match *self {
-            Parent::Env(ref env) => env.lookup_type_var(id),
-            Parent::Stage(ref stage) => stage.lookup_type_var(id),
-        }
-    }
-
-    fn introduce_type_var(&mut self) -> Ty {
-        match *self {
-            Parent::Env(ref mut env) => env.introduce_type_var(),
-            Parent::Stage(ref mut stage) => stage.introduce_type_var(),
-        }
-    }
-}
-
+/// A stage is an extension of a parsing environment. It wraps around
+/// the internal environment, and acts as a staging ground for substitutions
+/// The substitutions are applied when `fn apply(mut self)` is called.
 struct Stage<'a> {
-    env: Parent<'a>,
+    env: &'a mut (Env + 'a),
     subs: HashMap<Ident, Ty>,
     unified: HashSet<(Ty, Ty)>,
 }
 
 impl <'a> Stage<'a> {
-    fn new<'a>(env: &'a mut Environment) -> Stage<'a> {
+    fn new<'a>(env: &'a mut (Env + 'a)) -> Stage<'a> {
         Stage{
-            env: Parent::Env(env),
-            subs: HashMap::new(),
-            unified: HashSet::new(),
-        }
-    }
-
-    fn child(&'a mut self) -> Stage<'a> {
-        Stage{
-            env: Parent::Stage(self),
+            env: env,
             subs: HashMap::new(),
             unified: HashSet::new(),
         }
@@ -59,9 +27,15 @@ impl <'a> Stage<'a> {
             self.env.substitute(id.clone(), ty.clone());
         }
     }
+}
 
+impl <'a> Env for Stage<'a> {
     fn substitute(&mut self, a: Ident, b: Ty) {
         self.subs.insert(a, b);
+    }
+
+    fn lookup_data_var(&mut self, id: &Ident) -> Ty {
+        self.env.lookup_data_var(id)
     }
 
     fn lookup_type_var(&self, id: &Ident) -> Option<&Ty> {
@@ -71,51 +45,6 @@ impl <'a> Stage<'a> {
     fn introduce_type_var(&mut self) -> Ty {
         self.env.introduce_type_var()
     }
-}
-
-fn free_vars<'a>(stage: &mut Stage<'a>, ty: &Ty, checked: &mut HashSet<Ty>) -> HashSet<Ident> {
-    let mut idents = HashSet::new();
-    if checked.contains(ty) { return idents } else { checked.insert(ty.clone()); }
-
-    debug!("ty: {}", ty);
-
-    match *ty {
-        Ty::Ident(ref id) => {
-            if let Some(ty) = stage.lookup_type_var(id).cloned() {
-                return free_vars(stage, &ty.clone(), checked)
-            } else {
-                idents.insert(id.clone());
-            }
-        }
-        Ty::Rec(ref extends, ref props) => {
-            if let Some(box ref extends) = *extends {
-                idents.extend(free_vars(stage, extends, checked).iter().cloned());
-            }
-
-            for prop in props.iter() {
-                match *prop {
-                    TyProp::Val(_, ref ty) => {
-                        idents.extend(free_vars(stage, ty, checked).iter().cloned());
-                    }
-                    TyProp::Method(_, ref args, ref res) => {
-                        for arg in args.iter() {
-                            idents.extend(free_vars(stage, arg, checked).iter().cloned());
-                        }
-                        idents.extend(free_vars(stage, res, checked).iter().cloned());
-                    }
-                }
-            }
-        }
-        Ty::Union(ref opts) => {
-            let mut idents = HashSet::new();
-
-            for opt in opts.iter() {
-                idents.extend(free_vars(stage, opt, checked).iter().cloned());
-            }
-        }
-    }
-
-    idents
 }
 
 fn unify_props<'a>(stage: &mut Stage<'a>, a: &TyProp, b: &TyProp) -> Result<(), String> {
@@ -282,10 +211,10 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
             for opt in opts.iter() {
                 // These are the free variables in opt
                 // Actually whoops...
-                let free = free_vars(stage, opt, &mut HashSet::new());
+                let free = free_vars(stage, opt);
 
                 // Unify with the option in a child_stage
-                let mut child_stage = stage.child();
+                let mut child_stage = Stage::new(stage);
 
                 try!(_unify(&mut child_stage, opt, &a));
 
@@ -364,7 +293,7 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
 
                     // It shouldn't loop infinitely (I think), as it (kinda)
                     // shares the same Unified hashmap.
-                    if _unify(&mut stage.child(), aopt, bopt).is_ok() {
+                    if _unify(&mut Stage::new(stage), aopt, bopt).is_ok() {
                         uniopts.push(UniOpt{
                             aopt: aopt,
                             bopt: bopt,
@@ -432,7 +361,7 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
     }
 }
 
-pub fn unify<'a>(env: &mut Environment, a: &Ty, b: &Ty) -> Result<(), String> {
+pub fn unify<'a>(env: &mut (Env + 'a), a: &Ty, b: &Ty) -> Result<(), String> {
     let mut stage = Stage::new(env);
     try!(_unify(&mut stage, a, b));
 
