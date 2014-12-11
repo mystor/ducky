@@ -34,7 +34,7 @@ impl <'a> Env for Stage<'a> {
     fn substitute(&mut self, a: Ident, b: Ty) {
         // Verify that the substitutions are non-recursive
         if toplevel_vars(self, &b).contains(&a) {
-            panic!("Cannot perform a toplevel-recursive substitution");
+            panic!("Cannot perform a toplevel-recursive substitution\n    ({} => {})", a, b);
         }
 
         self.subs.insert(a, b);
@@ -159,13 +159,17 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
     let b = std_form(stage, b.clone());
 
     match (&a, &b) {
-        (&Ty::Ident(ref a), b) => {
-            stage.substitute(a.clone(), b.clone());
+        (&Ty::Ident(ref id), _) => {
+            if a != b {
+                stage.substitute(id.clone(), b.clone());
+            }
 
             Ok(())
         }
-        (a, &Ty::Ident(ref b)) => {
-            stage.substitute(b.clone(), a.clone());
+        (_, &Ty::Ident(ref id)) => {
+            if a != b {
+                stage.substitute(id.clone(), a.clone());
+            }
 
             Ok(())
         }
@@ -329,35 +333,43 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
                 // These first two conditionals are just checking invariants. We need
                 // to unwrap some data structures, and may as well make sure that
                 // some invariants are held along the way!
-                let extends = aopt.unwrap_extends().unwrap_ident();
-                if let Some(ref union) = stage.lookup_type_var(&extends).cloned() {
-                    if let Ty::Union(ref opts) = *union {
-                        // Finally, we have reached the opts which were created by
-                        // the unification (hopefully?)
+                if let Some(ref extends) = aopt.get_extends() {
+                    let extends = extends.unwrap_ident();
+                    if let Some(ref union) = stage.lookup_type_var(&extends).cloned() {
+                        if let Ty::Union(ref opts) = *union {
+                            // Finally, we have reached the opts which were created by
+                            // the unification (hopefully?)
 
-                        // We need to pair each opt with its uniopt
-                        let mut zipped =
-                            uniopts.iter().filter(|x| x.aopt == aopt).zip(opts.iter());
-                        for (uniopt, opt) in zipped {
-                            // Unify the uniopt's tyvar with the opt's extension,
-                            // This ensures that the two sides will use the same tyvar
-                            match *opt {
-                                Ty::Rec(Some(box ref extends), _) => {
-                                    try!(_unify(stage, extends, &uniopt.tyvar));
+                            // We need to pair each opt with its uniopt
+                            let mut zipped =
+                                uniopts.iter().filter(|x| x.aopt == aopt).zip(opts.iter());
+                            for (uniopt, opt) in zipped {
+                                // Unify the uniopt's tyvar with the opt's extension,
+                                // This ensures that the two sides will use the same tyvar
+                                match *opt {
+                                    Ty::Rec(Some(box ref extends), _) => {
+                                        try!(_unify(stage, extends, &uniopt.tyvar));
+                                    }
+                                    Ty::Rec(None, _) => {/* Can this happen? */}
+                                    Ty::Ident(_) => {
+                                        try!(_unify(stage, aopt, opt));
+                                    }
+                                    _ => unreachable!("Invariant")
                                 }
-                                Ty::Rec(None, _) => {/* Can this happen? */}
-                                Ty::Ident(_) => {
-                                    try!(_unify(stage, aopt, opt));
-                                }
-                                _ => unreachable!("Invariant")
                             }
+                            Ok(())
+                        } else {
+                            // Umm, I guess we don't need to worry about that anymore? I'm not sure...
+                            Ok(())
                         }
                     } else {
-                        unreachable!("Invariant");
+                        Err("Can't unify, because we're missing stuff! woop! I'm not sure what went wrong, lets find out later".to_string())
                     }
-                    Ok(())
                 } else {
-                    Err("Can't unify, because we're missing stuff! woop! I'm not sure what went wrong, lets find out later".to_string())
+                    // It looks like every element in the other side unified just fine?
+                    // Let's just do nothing for now. In the future we may need to
+                    // do some extra work to verify correctness n' stuff
+                    Ok(())
                 }
             }
 

@@ -128,11 +128,11 @@ impl Ty {
         }
     }
 
-    pub fn unwrap_extends(&self) -> &Ty {
+    pub fn get_extends(&self) -> Option<&Ty> {
         match *self {
-            Ty::Ident(_) => self,
-            Ty::Rec(Some(box ref ty), _) => ty,
-            _ => panic!("ICE: Couldn't Unwrap Extension!"),
+            Ty::Ident(_) => Some(self),
+            Ty::Rec(Some(box ref ty), _) => Some(ty),
+            _ => None,
         }
     }
 

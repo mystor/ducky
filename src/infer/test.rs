@@ -95,13 +95,13 @@ fn infer_args_through_intermediate_vars() {
         f({});
     });
 
-    infer_err(stringify!{
+    infer_ok(stringify!{
         let id = fn(x) { x };
         let f = fn(y) {
             let z = id(y);
             z.prop
         };
-        // f({ prop: {} });
+        f({ prop: {} });
     });
 
     infer_err(stringify!{
