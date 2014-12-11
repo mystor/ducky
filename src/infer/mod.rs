@@ -51,7 +51,7 @@ fn infer_body(scope: &mut Scope, params: &Vec<Ident>, body: &Expr) -> Result<Ty,
 
 pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
     match *e {
-        Expr::Literal(ref lit) => { Ok(lit.ty()) } // We probably can just inline that
+        Expr::Literal(ref lit) => { Ok(util::val_ty(scope, lit.ty())) } // We probably can just inline that
         Expr::Ident(ref ident) => {
             let uninst = scope.lookup_data_var(ident);
             Ok(scope.instantiate(&uninst, &mut HashMap::new()))
@@ -113,7 +113,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
                 }
             }
 
-            Ok(Ty::Rec(None, prop_tys))
+            Ok(util::val_ty(scope, Ty::Rec(None, prop_tys)))
         }
         Expr::Block(ref stmts) => {
             // Infer for each value but the last one
@@ -131,7 +131,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
                 None => {}
             }
             // If the last element isn't an Expression, the value is Null ({})
-            Ok(Ty::Ident(Ident(Atom::from_slice("Null"), BuiltIn)))
+            Ok(util::val_ty(scope, Ty::Ident(Ident(Atom::from_slice("Null"), BuiltIn))))
         }
         Expr::If(box ref cond, box ref thn, box ref els) => {
             // Infer the type of the condition, and ensure it is Bool

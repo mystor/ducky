@@ -96,6 +96,15 @@ fn infer_args_through_intermediate_vars() {
     });
 
     infer_err(stringify!{
+        let id = fn(x) { x };
+        let f = fn(y) {
+            let z = id(y);
+            z.prop
+        };
+        // f({ prop: {} });
+    });
+
+    infer_err(stringify!{
         let f = fn(x) {
             let y = x;
             x.prop

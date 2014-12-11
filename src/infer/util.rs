@@ -38,8 +38,6 @@ fn _free_vars<'a>(stage: &mut (Env + 'a), ty: &Ty, checked: &mut HashSet<Ty>) ->
             }
         }
         Ty::Union(ref opts) => {
-            let mut idents = HashSet::new();
-
             for opt in opts.iter() {
                 idents.extend(_free_vars(stage, opt, checked).iter().cloned());
             }
@@ -47,4 +45,34 @@ fn _free_vars<'a>(stage: &mut (Env + 'a), ty: &Ty, checked: &mut HashSet<Ty>) ->
     }
 
     idents
+}
+
+pub fn toplevel_vars<'a>(stage: &mut (Env + 'a), ty: &Ty) -> HashSet<Ident> {
+    let mut idents = HashSet::new();
+
+    match *ty {
+        Ty::Ident(ref id) => {
+            if let Some(ty) = stage.lookup_type_var(id).cloned() {
+                return toplevel_vars(stage, &ty.clone())
+            } else {
+                idents.insert(id.clone());
+            }
+        }
+        Ty::Rec(ref extends, _) => {
+            if let Some(box ref extends) = *extends {
+                idents.extend(toplevel_vars(stage, extends).iter().cloned());
+            }
+        }
+        Ty::Union(ref opts) => {
+            for opt in opts.iter() {
+                idents.extend(toplevel_vars(stage, opt).iter().cloned());
+            }
+        }
+    }
+
+    idents
+}
+
+pub fn val_ty(scope: &mut Env, ty: Ty) -> Ty {
+    Ty::Union(vec![ty, scope.introduce_type_var()])
 }

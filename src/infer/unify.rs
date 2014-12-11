@@ -1,7 +1,8 @@
 use std::vec::Vec;
 use std::collections::{HashMap, HashSet};
-use infer::util::free_vars;
+use infer::util::{free_vars, toplevel_vars};
 use infer::env::Env;
+use infer::InferValue;
 use il::*;
 
 /// A stage is an extension of a parsing environment. It wraps around
@@ -31,6 +32,11 @@ impl <'a> Stage<'a> {
 
 impl <'a> Env for Stage<'a> {
     fn substitute(&mut self, a: Ident, b: Ty) {
+        // Verify that the substitutions are non-recursive
+        if toplevel_vars(self, &b).contains(&a) {
+            panic!("Cannot perform a toplevel-recursive substitution");
+        }
+
         self.subs.insert(a, b);
     }
 
@@ -44,6 +50,12 @@ impl <'a> Env for Stage<'a> {
 
     fn introduce_type_var(&mut self) -> Ty {
         self.env.introduce_type_var()
+    }
+
+    fn as_infervalue(&self) -> InferValue {
+        let mut iv = self.env.as_infervalue();
+        iv.type_vars.extend(self.subs.iter().map(|(x, y)| (x.clone(), y.clone())));
+        iv
     }
 }
 
@@ -266,6 +278,7 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
             // yeah
             // woop!
 
+            #[deriving(Show)]
             struct UniOpt<'a> {
                 aopt: &'a Ty,
                 bopt: &'a Ty,
@@ -316,9 +329,9 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
                 // These first two conditionals are just checking invariants. We need
                 // to unwrap some data structures, and may as well make sure that
                 // some invariants are held along the way!
-                if let Ty::Rec(Some(box Ty::Ident(ref extends)), _) = *aopt {
-                    let union = stage.lookup_type_var(extends).unwrap().clone();
-                    if let Ty::Union(ref opts) = union {
+                let extends = aopt.unwrap_extends().unwrap_ident();
+                if let Some(ref union) = stage.lookup_type_var(&extends).cloned() {
+                    if let Ty::Union(ref opts) = *union {
                         // Finally, we have reached the opts which were created by
                         // the unification (hopefully?)
 
@@ -342,10 +355,10 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
                     } else {
                         unreachable!("Invariant");
                     }
+                    Ok(())
                 } else {
-                    unreachable!("Invariant");
+                    Err("Can't unify, because we're missing stuff! woop! I'm not sure what went wrong, lets find out later".to_string())
                 }
-                Ok(())
             }
 
             for aopt in aopts.iter() {

@@ -128,6 +128,14 @@ impl Ty {
         }
     }
 
+    pub fn unwrap_extends(&self) -> &Ty {
+        match *self {
+            Ty::Ident(_) => self,
+            Ty::Rec(Some(box ref ty), _) => ty,
+            _ => panic!("ICE: Couldn't Unwrap Extension!"),
+        }
+    }
+
     pub fn is_ident(&self) -> bool {
         if let Ty::Ident(..) = *self { true } else { false }
     }

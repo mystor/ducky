@@ -15,6 +15,8 @@ pub trait Env {
     fn introduce_type_var(&mut self) -> Ty;
 
     fn substitute(&mut self, id: Ident, ty: Ty);
+
+    fn as_infervalue(&self) -> InferValue;
 }
 
 #[deriving(Show, Clone)]
@@ -24,7 +26,6 @@ struct Environment {
     counter: uint,
 }
 
-// TODO: This can probably be merged into the Scope<'a> Struct
 #[deriving(Show)]
 enum MOE<'a> {
     Owned(Environment),
@@ -153,14 +154,6 @@ impl <'a>Scope<'a> {
         }
     }
 
-    pub fn as_infervalue(&self) -> InferValue {
-        // TODO: Remove
-        InferValue{
-            data_vars: self.env.data_vars.clone(),
-            type_vars: self.env.type_vars.clone(),
-        }
-    }
-
     fn maybe_bind(&mut self, id: &Ident, maybe_binds: &[Ident]) {
         if self.bound_vars.contains(id) {
             self.bound_vars.extend(maybe_binds.iter().cloned());
@@ -217,4 +210,11 @@ impl <'a> Env for Scope<'a> {
         assert!(prev.is_none());
     }
 
+    fn as_infervalue(&self) -> InferValue {
+        // TODO: Remove
+        InferValue{
+            data_vars: self.env.data_vars.clone(),
+            type_vars: self.env.type_vars.clone(),
+        }
+    }
 }
