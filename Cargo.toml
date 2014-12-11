@@ -8,8 +8,7 @@ readme = "README.md"
 
 [dependencies.string_cache]
 
-git = "https://github.com/mystor/string-cache.git"
-branch = "std-sync"
+git = "https://github.com/servo/string-cache.git"
 
 [[bin]]
 

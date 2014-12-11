@@ -2,12 +2,12 @@
 name = "ducky"
 version = "0.0.1"
 dependencies = [
- "string_cache 0.0.0 (git+https://github.com/mystor/string-cache.git?ref=std-sync)",
+ "string_cache 0.0.0 (git+https://github.com/servo/string-cache.git)",
 ]
 
 [[package]]
 name = "gcc"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -43,19 +43,19 @@ dependencies = [
 [[package]]
 name = "string_cache"
 version = "0.0.0"
-source = "git+https://github.com/mystor/string-cache.git?ref=std-sync#bf93b93cee570ccb0bd40e3c7f6c4f7a77b94631"
+source = "git+https://github.com/servo/string-cache.git#c63f5640bc124daf77076167afcde88e9e3dc50e"
 dependencies = [
  "lazy_static 0.1.0 (git+https://github.com/Kimundi/lazy-static.rs)",
  "phf 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "phf_mac 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "string_cache_macros 0.0.0 (git+https://github.com/mystor/string-cache.git?ref=std-sync)",
+ "string_cache_macros 0.0.0 (git+https://github.com/servo/string-cache.git)",
  "xxhash 0.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "string_cache_macros"
 version = "0.0.0"
-source = "git+https://github.com/mystor/string-cache.git?ref=std-sync#bf93b93cee570ccb0bd40e3c7f6c4f7a77b94631"
+source = "git+https://github.com/servo/string-cache.git#c63f5640bc124daf77076167afcde88e9e3dc50e"
 dependencies = [
  "lazy_static 0.1.0 (git+https://github.com/Kimundi/lazy-static.rs)",
 ]
@@ -65,7 +65,7 @@ name = "time"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "gcc 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gcc 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
