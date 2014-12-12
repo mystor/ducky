@@ -8,7 +8,7 @@ pub use self::Context::*;
 pub enum Context {
     Internal(uint),
     BuiltIn,
-    User,
+    User(uint),
     Unresolved, // Unresolved values have just been read in by the program
 }
 
@@ -25,12 +25,13 @@ impl Ident {
         Ident(Atom::from_slice(s), Unresolved)
     }
 
-    pub fn from_user_slice(s: &str) -> Ident {
-        Ident(Atom::from_slice(s), User)
-    }
-
     pub fn from_builtin_slice(s: &str) -> Ident {
         Ident(Atom::from_slice(s), BuiltIn)
+    }
+
+    pub fn scoped_with_depth(&self, depth: uint) -> Ident {
+        let Ident(ref atom, _) = *self;
+        Ident(atom.clone(), User(depth))
     }
 }
 
@@ -38,8 +39,8 @@ impl fmt::Show for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Ident(ref atom, ref context) = *self;
         match *context {
-            User => {
-                write!(f, "0~{}", atom.as_slice())
+            User(i) => {
+                write!(f, "{}~{}", i, atom.as_slice())
             }
             BuiltIn => {
                 write!(f, "::{}", atom.as_slice())

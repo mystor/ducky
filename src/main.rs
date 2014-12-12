@@ -15,6 +15,7 @@ extern crate string_cache;
 // LLVM bindings (from rustc)
 extern crate rustc_llvm;
 
+pub mod scope;
 pub mod lexer;
 pub mod parser;
 pub mod il;
