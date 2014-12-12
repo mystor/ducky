@@ -1,6 +1,7 @@
 use infer;
 use lexer;
 use parser;
+use scope;
 
 /// Compiles some code, and then infers its type.
 fn infer_code(code: &str) -> Result<infer::InferValue, String> {
@@ -8,7 +9,8 @@ fn infer_code(code: &str) -> Result<infer::InferValue, String> {
     // Because these tests are only supposed to be testing inference, not lexing/parsing
     let tokens = try!(lexer::lex(code));
     let ast = try!(parser::parse_program(&mut parser::State::new(tokens.as_slice())));
-    infer::infer_program(ast)
+    let scoped_ast = try!(scope::scoped_block(&mut scope::Scope::new(), ast.as_slice()));
+    infer::infer_program(scoped_ast)
 }
 
 /// Asserts that there was an error when typechecking the given code

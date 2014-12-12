@@ -4,18 +4,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use il::*;
 
-#[deriving(Clone)]
-pub struct Scope {
-    counter: Rc<RefCell<Counter<uint>>>,
-    subs: HashMap<Ident, (Ident, int)>,
-}
-
-impl Scope {
-    fn next(&self) -> uint {
-        self.counter.borrow_mut().next().unwrap()
-    }
-}
-
 macro_rules! builtin {
     ($subs:expr <- [$($ident:expr),+]) => {
         {
@@ -24,6 +12,12 @@ macro_rules! builtin {
                 (::il::Ident::from_builtin_slice($ident), 1));)+
         }
     }
+}
+
+#[deriving(Clone)]
+pub struct Scope {
+    counter: Rc<RefCell<Counter<uint>>>,
+    subs: HashMap<Ident, (Ident, int)>,
 }
 
 impl Scope {
@@ -41,6 +35,10 @@ impl Scope {
             counter: Rc::new(RefCell::new(count(0, 1))),
             subs: subs,
         }
+    }
+
+    fn next(&self) -> uint {
+        self.counter.borrow_mut().next().unwrap()
     }
 }
 
@@ -69,9 +67,14 @@ pub fn scoped_expr(scope: &mut Scope, expr: &Expr) -> Result<Expr, String> {
                             let sub = arg.scoped_with_depth(nscope.next());
                             nscope.subs.insert(arg.clone(), (sub, 0));
                         }
+                        let nargs = args.iter().map(|arg| {
+                            let sub = arg.scoped_with_depth(nscope.next());
+                            nscope.subs.insert(arg.clone(), (sub.clone(), 0));
+                            sub
+                        }).collect();
 
                         Ok(Prop::Method(symb.clone(),
-                                        args.clone(),
+                                        nargs,
                                         try!(scoped_expr(&mut nscope, body))))
                     }
                 }
