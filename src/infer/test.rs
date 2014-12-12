@@ -212,3 +212,48 @@ fn nested_non_homo_if() {
         }
     });
 }
+
+#[test]
+fn union_as_fn_arg() {
+    infer_ok(stringify!{
+        // G produces a union when passed a bool
+        let g = fn(y) {
+            if y {
+                { a: 5, b: 10 }
+            } else {
+                { a: {} }
+            }
+        };
+
+        // H will try to use the a property of something
+        let h = fn(z) {
+            z.a
+        };
+
+        // F is our "entry" point as we can't create bools yet
+        let f = fn(x) {
+            h(g(x))
+        };
+    });
+
+    infer_err(stringify!{
+        // G produces a union when passed a bool
+        let g = fn(y) {
+            if y {
+                { a: 5, b: 10 }
+            } else {
+                { a: {} }
+            }
+        };
+
+        // H will try to use the a property of something
+        let h = fn(z) {
+            z.b
+        };
+
+        // F is our "entry" point as we can't create bools yet
+        let f = fn(x) {
+            h(g(x))
+        };
+    });
+}
