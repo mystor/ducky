@@ -22,6 +22,7 @@ pub mod il;
 pub mod infer;
 pub mod simplify;
 pub mod gen;
+pub mod specialize;
 
 fn infer_types_for_code(code: &str) {
     info!("-----------------------");
