@@ -1,8 +1,8 @@
-#![allow(unused_variables, dead_code)]
+/* #![allow(unused_variables, dead_code)]
 
 use std::ptr;
 use std::collections::HashMap;
-use string_cache::Atom;
+use intern::Atom;
 use rustc_llvm as llvm;
 use il::*;
 
@@ -377,3 +377,4 @@ pub unsafe fn gen_expr(ctx: &mut GenContext, expr: &Expr) -> Result<llvm::ValueR
         _ => unimplemented!()
     }
 }
+*/

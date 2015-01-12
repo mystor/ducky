@@ -1,19 +1,19 @@
-use string_cache::Atom;
+use intern::Atom;
 use std::fmt;
 
 // TODO: Namespace Context
 pub use self::Context::*;
 
-#[deriving(Show, PartialEq, Eq, Hash, Clone)]
+#[derive(Show, PartialEq, Eq, Hash, Clone)]
 pub enum Context {
-    Internal(uint),
+    Internal(u32),
     BuiltIn,
-    User(uint),
+    User(u32),
     Unresolved, // Unresolved values have just been read in by the program
 }
 
 //| Identifiers are names used for type and data variables
-#[deriving(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct Ident(pub Atom, pub Context);
 
 impl Ident {
@@ -29,7 +29,7 @@ impl Ident {
         Ident(Atom::from_slice(s), BuiltIn)
     }
 
-    pub fn scoped_with_depth(&self, depth: uint) -> Ident {
+    pub fn scoped_with_depth(&self, depth: u32) -> Ident {
         let Ident(ref atom, _) = *self;
         Ident(atom.clone(), User(depth))
     }
@@ -60,7 +60,7 @@ impl fmt::Show for Ident {
 }
 
 //| Symbols are names used for properties and methods
-#[deriving(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct Symbol(pub Atom);
 
 impl Symbol {
@@ -80,7 +80,7 @@ impl fmt::Show for Symbol {
     }
 }
 
-#[deriving(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum TyProp {
     Val(Symbol, Ty),
     Method(Symbol, Vec<Ty>, Ty),
@@ -99,22 +99,22 @@ impl fmt::Show for TyProp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             TyProp::Val(ref symbol, ref ty) => {
-                write!(f, "{}: {}", symbol, ty)
+                write!(f, "{:?}: {:?}", symbol, ty)
             }
             TyProp::Method(ref symbol, ref args, ref res) => {
                 // @TODO: This is terrible syntax, but must differentiate
                 // from ValTyProp
-                try!(write!(f, "fn {}(", symbol));
+                try!(write!(f, "fn {:?}(", symbol));
                 for arg in args.iter() {
-                    try!(write!(f, "{}", arg));
+                    try!(write!(f, "{:?}", arg));
                 }
-                write!(f, ") -> {}", res)
+                write!(f, ") -> {:?}", res)
             }
         }
     }
 }
 
-#[deriving(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Ty {
     Ident(Ident),
     Rec(Option<Box<Ty>>, Vec<TyProp>),
@@ -153,26 +153,26 @@ impl Ty {
 impl fmt::Show for Ty {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Ty::Ident(ref id) => write!(f, "{}", id),
+            Ty::Ident(ref id) => write!(f, "{:?}", id),
             Ty::Rec(ref maybe_ty, ref props) => {
                 if let Some(box ref ty) = *maybe_ty {
-                    try!(write!(f, "{}:{} ", ty, "{"));
+                    try!(write!(f, "{:?}:{:?} ", ty, "{"));
                     for prop in props.iter() {
-                        try!(write!(f, "{}, ", prop));
+                        try!(write!(f, "{:?}, ", prop));
                     }
-                    write!(f, "{}", "}")
+                    write!(f, "{:?}", "}")
                 } else {
-                    try!(write!(f, "{} ", "{"));
+                    try!(write!(f, "{:?} ", "{"));
                     for prop in props.iter() {
-                        try!(write!(f, "{}, ", prop));
+                        try!(write!(f, "{:?}, ", prop));
                     }
-                    write!(f, "{}", "}")
+                    write!(f, "{:?}", "}")
                 }
             }
             Ty::Union(ref options) => {
                 try!(write!(f, "("));
                 for option in options.iter() {
-                    try!(write!(f, "{} |", option));
+                    try!(write!(f, "{:?} |", option));
                 }
                 write!(f, ")")
             }
@@ -181,7 +181,7 @@ impl fmt::Show for Ty {
 }
 
 
-#[deriving(Show, Clone)]
+#[derive(Show, Clone)]
 pub enum Literal {
     Str(Atom),
     Int(i64),
@@ -200,13 +200,13 @@ impl Literal {
     }
 }
 
-#[deriving(Show, Clone)]
+#[derive(Show, Clone)]
 pub enum Prop {
     Val(Symbol, Expr),
     Method(Symbol, Vec<Ident>, Expr),
 }
 
-#[deriving(Show, Clone)]
+#[derive(Show, Clone)]
 pub enum Expr {
     Literal(Literal),
     Ident(Ident),
@@ -219,7 +219,7 @@ pub enum Expr {
     If(Box<Expr>, Box<Expr>, Box<Option<Expr>>),
 }
 
-#[deriving(Show, Clone)]
+#[derive(Show, Clone)]
 pub enum Stmt {
     Let(Ident, Expr),
     Expr(Expr),

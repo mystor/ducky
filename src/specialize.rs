@@ -1,6 +1,6 @@
-use string_cache::Atom;
+use intern::Atom;
 use std::fmt;
-use std::collections::{HashMap, HashSet, TreeMap};
+use std::collections::{HashMap, HashSet, BTreeMap};
 use il::*;
 
 /// A MethodImpl represents the implementation of a method. Each MethodImpl
@@ -11,7 +11,7 @@ use il::*;
 /// just not doing it right now.
 ///
 /// In addition, the MethodImpl has a bunch of specializations which are implemented on it
-#[deriving(Clone)]
+#[derive(Clone)]
 struct MethodImpl {
     /// The parameters which are required for the method
     params: Vec<Ident>,
@@ -22,7 +22,7 @@ struct MethodImpl {
 }
 
 /// Its a value in our language! Aren't you excited!
-#[deriving(Clone)]
+#[derive(Clone)]
 enum ValImpl {
     /// A struct representing a record, very handy!
     Rec(RecordImpl),
@@ -51,7 +51,7 @@ impl ValImpl {
 /// There is one RecordImpl for every set of methods and prop types.
 /// an environment is also passed in. Currently I'm making it a RecordImpl,
 /// but I may switch it to something else.
-#[deriving(Clone)]
+#[derive(Clone)]
 struct RecordImpl {
     /// We need some arbitrary identifier thing so that we can do enums easily and stuff
     /// It should start at like 8 or something so that I can have reserved numbers
@@ -59,11 +59,11 @@ struct RecordImpl {
     /// Maybe I can do this in that hashmap thing? That could be cool.
     /// It would be nice if this didn't have to be in the RecordImpl possibly,
     /// but I'm not really sure
-    some_arbitrary_identifier_thing: int,
+    some_arbitrary_identifier_thing: i32,
     // TODO: Should this be here even?
     environment: Option<Box<RecordImpl>>,
-    methods: TreeMap<Symbol, MethodImpl>,
-    props: TreeMap<Symbol, ValImpl>,
+    methods: BTreeMap<Symbol, MethodImpl>,
+    props: BTreeMap<Symbol, ValImpl>,
 }
 
 impl RecordImpl {
@@ -71,7 +71,7 @@ impl RecordImpl {
 }
 
 // WHat is this even? Who knows! I will implement it later
-#[deriving(Clone)]
+#[derive(Clone)]
 struct MethodSpec {
     return_valimpl: ValImpl,
 }
@@ -92,11 +92,19 @@ enum ExprImpl {
     /// We need to have like a refernce to a value which we are looking up... I'm not sure
     /// maybe... umm... I'm really really not sure
     /// it'll be fun
-    Ident(bool, int),
+    Ident(bool, i32),
 
     Rec{
         rimpl: RecordImpl,
-        props: TreeMap<Symbol, ExprImpl>,
+        props: BTreeMap<Symbol, ExprImpl>,
+    },
+
+    /// Members! Woop! SHould we distinguish between members of unions and members of
+    /// recs? No lets just do an if statement thingymabob
+    Member{
+        rimpl: RecordImpl,
+        record: Box<ExprImpl>,
+        symb: Symbol,
     },
 
     /// Calls need to know the particular methodspec which they need
@@ -125,7 +133,10 @@ impl ExprImpl {
 
             // We s
             ExprImpl::Ident(..) => panic!("Shit, who even knows!?!?!?!"),
-            ExprImpl::Member{
+            ExprImpl::Member{ref rimpl, ref symb, ..} => {
+                let props = rimpl.props;
+                if let Some(val) = props.get(symb) {val.clone()} else { panic!("FUCK"); }
+            },
             ExprImpl::Call{ref mspec, ..} => mspec.return_valimpl.clone(),
 
         }
@@ -136,10 +147,16 @@ impl ExprImpl {
     }
 }
 
+fn foo() {
+    let mut hm = BTreeMap::new();
+    hm.insert("Hello, World", "World!");
+    hm.get(&"Hello, World");
+}
+
 
 /// This is the state object. Its like mutable and stuff. It'll be fun!
 struct SpecState {
-    foo: int
+    foo: i32
 }
 
 fn specialize_expr(st: &mut SpecState, expr: &Expr) -> ExprImpl {

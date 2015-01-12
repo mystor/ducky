@@ -5,7 +5,7 @@ use std::rc::Rc;
 use il::*;
 
 macro_rules! builtin {
-    ($subs:expr <- [$($ident:expr),+]) => {
+    ($subs:expr , [$($ident:expr),+]) => {
         {
             $($subs.insert(
                 ::il::Ident::from_slice($ident),
@@ -14,22 +14,22 @@ macro_rules! builtin {
     }
 }
 
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct Scope {
-    counter: Rc<RefCell<Counter<uint>>>,
-    subs: HashMap<Ident, (Ident, int)>,
+    counter: Rc<RefCell<Counter<u32>>>,
+    subs: HashMap<Ident, (Ident, i32)>,
 }
 
 impl Scope {
     pub fn new() -> Scope {
         let mut subs = HashMap::new();
 
-        builtin!(subs <- [
+        builtin!(subs, [
             "true",
             "false",
             "null",
             "Int"
-            ])
+            ]);
 
         Scope{
             counter: Rc::new(RefCell::new(count(0, 1))),
@@ -37,7 +37,7 @@ impl Scope {
         }
     }
 
-    fn next(&self) -> uint {
+    fn next(&self) -> u32 {
         self.counter.borrow_mut().next().unwrap()
     }
 }
@@ -46,11 +46,11 @@ pub fn scoped_expr(scope: &mut Scope, expr: &Expr) -> Result<Expr, String> {
     match *expr {
         Expr::Literal(_) => Ok(expr.clone()),
         Expr::Ident(ref id) => {
-            if let Some(&(ref id, ref mut use_count)) = scope.subs.get_mut(id) {
+            if let Some(&mut (ref id, ref mut use_count)) = scope.subs.get_mut(id) {
                 *use_count += 1;
                 Ok(Expr::Ident(id.clone()))
             } else {
-                Err(format!("Use of undeclared variable: {}", id))
+                Err(format!("Use of undeclared variable: {:?}", id))
             }
         }
         Expr::Rec(ref props) => {
@@ -168,7 +168,7 @@ mod test {
         match scope(code) {
             Err(_) => {},
             Ok(stmts) => {
-                panic!("\nUnexpected error scoping code:\n\n{}\n\n{}\n", code, stmts);
+                panic!("\nUnexpected error scoping code:\n\n{}\n\n{:?}\n", code, stmts);
             }
         }
     }

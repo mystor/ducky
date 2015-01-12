@@ -1,6 +1,6 @@
 use std::fmt;
 use std::collections::HashMap;
-use string_cache::Atom;
+use intern::Atom;
 use il::*;
 use self::env::{Scope, Env};
 
@@ -11,7 +11,7 @@ mod unify;
 #[cfg(test)]
 mod test;
 
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct InferValue {
     pub data_vars: HashMap<Ident, Ty>,
     pub type_vars: HashMap<Ident, Ty>,
@@ -22,12 +22,12 @@ impl fmt::Show for InferValue {
         try!(write!(f, "{{\n"));
         try!(write!(f, "  data_vars: {{\n"));
         for (id, ty) in self.data_vars.iter() {
-            try!(write!(f, "    {:10}: {}\n", format!("{}", id), ty));
+            try!(write!(f, "    {:10}: {:?}\n", format!("{:?}", id), ty));
         }
         try!(write!(f, "  }}\n"));
         try!(write!(f, "  type_vars: {{\n"));
         for (id, ty) in self.type_vars.iter() {
-            try!(write!(f, "    {:10}: {}\n", format!("{}", id), ty));
+            try!(write!(f, "    {:10}: {:?}\n", format!("{:?}", id), ty));
         }
         try!(write!(f, "  }}\n"));
         write!(f, "}}")
@@ -35,21 +35,17 @@ impl fmt::Show for InferValue {
 }
 
 
-fn infer_body(scope: &mut Scope, params: &Vec<Ident>, body: &Expr) -> Result<Ty, String> {
-    let bound = { // Determine the list of variables which should be bound
-        let transform = |x| {
-            if let Ty::Ident(id) = scope.lookup_data_var(x) {
-                id
-            } else { unreachable!() }
-        };
-        params.iter().map(transform).collect()
-    };
+fn infer_body<'a, 'b: 'a>(scope: &'b mut Scope<'a>, params: &Vec<Ident>, body: &Expr) -> Result<Ty, String> {
+    let bound = params.iter().map(|x| {
+        if let Ty::Ident(id) = scope.lookup_data_var(x) {
+            id
+        } else { unreachable!() }
+    }).collect();
 
-    let mut new_scope = scope.new_child(bound);
-    infer_expr(&mut new_scope, body)
+    infer_expr(&mut scope.new_child(bound), body)
 }
 
-pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
+pub fn infer_expr<'a, 'b: 'a>(scope: &'b mut Scope<'a>, e: &Expr) -> Result<Ty, String> {
     match *e {
         Expr::Literal(ref lit) => { Ok(util::val_ty(scope, lit.ty())) } // We probably can just inline that
         Expr::Ident(ref ident) => {
@@ -155,7 +151,7 @@ pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
     }
 }
 
-pub fn infer_stmt(scope: &mut Scope, stmt: &Stmt) -> Result<(), String> {
+pub fn infer_stmt<'a, 'b: 'a>(scope: &'b mut Scope<'a>, stmt: &Stmt) -> Result<(), String> {
     match *stmt {
         Stmt::Expr(ref expr) => {
             try!(infer_expr(scope, expr));

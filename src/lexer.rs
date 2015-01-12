@@ -1,12 +1,13 @@
-use string_cache::Atom;
+use std::str::FromStr;
+use intern::Atom;
 use self::Token::*;
 
 macro_rules! nom {
-    ($stream:ident -> { $($patt:expr => $action:expr),+ }) => (
+    ($stream:ident | $var: ident | -> { $($patt:expr => $action:expr),+ }) => (
         $(if let Some((0, len)) = regex!($patt).find($stream) {
-            let val = $stream.slice_to(len);
+            let $var = $stream.slice_to(len);
             $stream = $stream.slice_from(len);
-            Some($action(val))
+            Some($action)
         })else+ else {
             None
         }
@@ -14,7 +15,7 @@ macro_rules! nom {
 }
 
 #[allow(non_camel_case_types)]
-#[deriving(Show)]
+#[derive(Show)]
 pub enum Token {
     // Operators
     EQ,
@@ -72,56 +73,56 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
     let mut toks: Vec<Token> = vec![];
     let mut stream = program.clone();
 
-    let start_len = stream.char_len();
+    let start_len = stream.len(); // TODO(michael): Figure out why char_len doesn't work anymore
 
-    while stream.char_len() > 0 {
+    while stream.len() > 0 {
         if let Some((0, len)) = regex!(r"^\s+").find(stream) {
             // Skip all spaces
             stream = stream.slice_from(len);
-        } else if let Some(tok) = nom!(stream -> {
+        } else if let Some(tok) = nom!(stream |v| -> {
             // Brackets, Braces, and Parens
-            r"^\{" => |_| { LBRACE },
-            r"^\}" => |_| { RBRACE },
-            r"^\(" => |_| { LPAREN },
-            r"^\)" => |_| { RPAREN },
-            r"^\[" => |_| { LBRACKET },
-            r"^\]" => |_| { RBRACKET },
+            r"^\{" => { LBRACE },
+            r"^\}" => { RBRACE },
+            r"^\(" => { LPAREN },
+            r"^\)" => { RPAREN },
+            r"^\[" => { LBRACKET },
+            r"^\]" => { RBRACKET },
 
             // Arrows
-            r"^->" => |_| { RARROW },
-            r"^<-" => |_| { LARROW },
-            r"^=>" => |_| { FAT_ARROW },
+            r"^->" => { RARROW },
+            r"^<-" => { LARROW },
+            r"^=>" => { FAT_ARROW },
 
             // Logical Operators
-            r"^<=" => |_| { LE },
-            r"^>=" => |_| { GE },
-            r"^!=" => |_| { NE },
-            r"^<"  => |_| { LT },
-            r"^>"  => |_| { GT },
-            r"^==" => |_| { EQEQ },
-            r"^="  => |_| { EQ },
-            r"^&&" => |_| { ANDAND },
-            r"^&"  => |_| { AND },
-            r"^\|\|" => |_| { OROR },
-            r"^\|" => |_| { OR },
-            r"^!"  => |_| { NOT },
+            r"^<=" => { LE },
+            r"^>=" => { GE },
+            r"^!=" => { NE },
+            r"^<"  => { LT },
+            r"^>"  => { GT },
+            r"^==" => { EQEQ },
+            r"^="  => { EQ },
+            r"^&&" => { ANDAND },
+            r"^&"  => { AND },
+            r"^\|\|" => { OROR },
+            r"^\|" => { OR },
+            r"^!"  => { NOT },
 
             // Mathematical Operators
-            r"^\+" => |_| { PLUS },
-            r"^-"  => |_| { MINUS },
-            r"^\*" => |_| { STAR },
-            r"^/"  => |_| { SLASH },
-            r"^%"  => |_| { PERCENT },
-            r"^\^" => |_| { CARET },
+            r"^\+" => { PLUS },
+            r"^-"  => { MINUS },
+            r"^\*" => { STAR },
+            r"^/"  => { SLASH },
+            r"^%"  => { PERCENT },
+            r"^\^" => { CARET },
 
             // Structural
-            r"^\." => |_| { DOT },
-            r"^,"  => |_| { COMMA },
-            r"^;"  => |_| { SEMI },
-            r"^:"  => |_| { COLON },
+            r"^\." => { DOT },
+            r"^,"  => { COMMA },
+            r"^;"  => { SEMI },
+            r"^:"  => { COLON },
 
             // The interesting ones
-            r"^[a-zA-Z_][a-zA-Z0-9_]*" => |v: &str| {
+            r"^[a-zA-Z_][a-zA-Z0-9_]*" => {
                 match v {
                     "fn" => FN,
                     "let" => LET,
@@ -132,13 +133,13 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
                     _ => IDENT(Atom::from_slice(v)),
                 }
             },
-            r#"^"([^"]|\\")""# => |v: &str| { LIT_STR(Atom::from_slice(v)) }, // TODO: Better string parsing
-            r"^[0-9]*\.[0-9]+" => |v: &str| { LIT_FLOAT(from_str(v).unwrap()) },
-            r"^[0-9]+" => |v: &str| { LIT_INTEGER(from_str(v).unwrap()) }
+            r#"^"([^"]|\\")""# => { LIT_STR(Atom::from_slice(v)) }, // TODO: Better string parsing
+            r"^[0-9]*\.[0-9]+" => { LIT_FLOAT(FromStr::from_str(v).unwrap()) },
+            r"^[0-9]+" => { LIT_INTEGER(FromStr::from_str(v).unwrap()) }
         }) {
             toks.push(tok);
         } else {
-            return Err(format!("{}: {}", start_len - stream.char_len(), stream.char_at(0)));
+            return Err(format!("{}: {}", start_len - stream.len(), stream.char_at(0)));
         }
     }
 

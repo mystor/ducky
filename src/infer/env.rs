@@ -1,5 +1,6 @@
+use std::ops::{Deref, DerefMut};
 use std::collections::{HashMap, HashSet};
-use string_cache::Atom;
+use intern::Atom;
 use il::*;
 use infer::util::free_vars;
 use infer::InferValue;
@@ -19,21 +20,23 @@ pub trait Env {
     fn as_infervalue(&self) -> InferValue;
 }
 
-#[deriving(Show, Clone)]
+#[derive(Show, Clone)]
 struct Environment {
     data_vars: HashMap<Ident, Ty>,
     type_vars: HashMap<Ident, Ty>,
-    counter: uint,
+    counter: u32,
 }
 
-#[deriving(Show)]
+#[derive(Show)]
 enum MOE<'a> {
     Owned(Environment),
     Shared(&'a mut Scope<'a>),
 }
 
-impl <'a> Deref<Environment> for MOE<'a> {
-    fn deref<'a>(&'a self) -> &'a Environment {
+impl <'a> Deref for MOE<'a> {
+    type Target = Environment;
+
+    fn deref<'b>(&'b self) -> &'b Environment {
         match *self {
             MOE::Owned(ref env) => env,
             MOE::Shared(ref scope) => scope.env.deref(),
@@ -41,8 +44,8 @@ impl <'a> Deref<Environment> for MOE<'a> {
     }
 }
 
-impl <'a> DerefMut<Environment> for MOE<'a> {
-    fn deref_mut<'a>(&'a mut self) -> &'a mut Environment {
+impl <'a> DerefMut for MOE<'a> {
+    fn deref_mut<'b>(&'b mut self) -> &'b mut Environment {
         match *self {
             MOE::Owned(ref mut env) => env,
             MOE::Shared(ref mut scope) => scope.env.deref_mut(),
@@ -50,7 +53,7 @@ impl <'a> DerefMut<Environment> for MOE<'a> {
     }
 }
 
-#[deriving(Show)]
+#[derive(Show)]
 pub struct Scope<'a> {
     env: MOE<'a>,
     bound_vars: HashSet<Ident>,
@@ -185,7 +188,8 @@ impl <'a> Env for Scope<'a> {
     fn introduce_type_var(&mut self) -> Ty {
         // TODO: Currently these names are awful
         let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-        let id = chars.slice_chars(self.env.counter % chars.len(), self.env.counter % chars.len() + 1);
+        let id = chars.slice_chars(self.env.counter as usize % chars.len(),
+                                   self.env.counter as usize % chars.len() + 1);
         self.env.counter += 1;
 
         Ty::Ident(Ident(Atom::from_slice(id), Internal(self.env.counter)))

@@ -15,7 +15,7 @@ struct Stage<'a> {
 }
 
 impl <'a> Stage<'a> {
-    fn new<'a>(env: &'a mut (Env + 'a)) -> Stage<'a> {
+    fn new(env: &'a mut (Env + 'a)) -> Stage<'a> {
         Stage{
             env: env,
             subs: HashMap::new(),
@@ -34,17 +34,17 @@ impl <'a> Env for Stage<'a> {
     fn substitute(&mut self, a: Ident, b: Ty) {
         // Verify that the substitutions are non-recursive
         if toplevel_vars(self, &b).contains(&a) {
-            panic!("Cannot perform a toplevel-recursive substitution\n    ({} => {})", a, b);
+            panic!("Cannot perform a toplevel-recursive substitution\n    ({:?} => {:?})", a, b);
         }
 
         self.subs.insert(a, b);
     }
 
-    fn lookup_data_var(&mut self, id: &Ident) -> Ty {
+    fn lookup_data_var<'b>(&mut self, id: &'b Ident) -> Ty {
         self.env.lookup_data_var(id)
     }
 
-    fn lookup_type_var(&self, id: &Ident) -> Option<&Ty> {
+    fn lookup_type_var<'b>(&self, id: &'b Ident) -> Option<&Ty> {
         self.subs.get(id).or_else(|| self.env.lookup_type_var(id))
     }
 
@@ -62,22 +62,22 @@ impl <'a> Env for Stage<'a> {
 fn unify_props<'a>(stage: &mut Stage<'a>, a: &TyProp, b: &TyProp) -> Result<(), String> {
     match (a, b) {
         (&TyProp::Val(_, ref aty), &TyProp::Val(_, ref bty)) => {
-            _unify(stage, aty, bty)
+            _unify(stage, aty.clone(), bty.clone())
         }
         (&TyProp::Method(_, ref aargs, ref ares), &TyProp::Method(_, ref bargs, ref bres)) => {
             if aargs.len() != bargs.len() {
-                return Err(format!("Cannot unify {} and {}", a, b));
+                return Err(format!("Cannot unify {:?} and {:?}", a, b));
             }
 
             // Unify each of the arguments
             for (aarg, barg) in aargs.iter().zip(bargs.iter()) {
-                try!(_unify(stage, aarg, barg));
+                try!(_unify(stage, aarg.clone(), barg.clone()));
             }
 
-            _unify(stage, ares, bres)
+            _unify(stage, ares.clone(), bres.clone())
         }
         _ => {
-            Err(format!("Cannot unify properties: {} and {}", a, b))
+            Err(format!("Cannot unify properties: {:?} and {:?}", a, b))
         }
     }
 }
@@ -85,7 +85,7 @@ fn unify_props<'a>(stage: &mut Stage<'a>, a: &TyProp, b: &TyProp) -> Result<(), 
 /// Reduces the type to it's "standard form". In this form, all
 /// "root" Ty::Idents are not bound in the stage, and there are no
 /// nested unions.
-fn std_form<'a>(stage: &Stage<'a>, ty: Ty) -> Ty {
+fn std_form<'a, 'b>(stage: &'b Stage<'a>, ty: Ty) -> Ty {
     match ty {
         Ty::Ident(ref id) => {
             if let Some(nty) = stage.lookup_type_var(id) {
@@ -142,7 +142,7 @@ fn std_form<'a>(stage: &Stage<'a>, ty: Ty) -> Ty {
     }
 }
 
-fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
+fn _unify<'a, 'b>(stage: &'a mut Stage<'b>, a: Ty, b: Ty) -> Result<(), String> {
     let ty_pairs = (a.clone(), b.clone());
     if stage.unified.contains(&(a.clone(), b.clone())) {
         return Ok(());
@@ -158,7 +158,9 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
     let a = std_form(stage, a.clone());
     let b = std_form(stage, b.clone());
 
-    match (&a, &b) {
+    let pair = (&a, &b);
+
+    match pair {
         (&Ty::Ident(ref id), _) => {
             if a != b {
                 stage.substitute(id.clone(), b.clone());
@@ -190,7 +192,8 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
             }
 
             for &(aprop, bprop) in joint.values() {
-                try!(unify_props(stage, aprop, bprop));
+                // TODO: (possibly unnecessary clones)
+                try!(unify_props(stage, &aprop.clone(), &bprop.clone()));
             }
 
             let common_free = if aextends.is_none() || bextends.is_none() {
@@ -205,7 +208,7 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
                                  Ty::Rec(common_free.clone(),
                                          only_a.values().map(|x| (**x).clone()).collect()));
             } else if ! only_a.is_empty() {
-                return Err(format!("Cannot unify {} and {}", a, b));
+                return Err(format!("Cannot unify {:?} and {:?}", a, b));
             }
 
             // Merge the remaining values into the other maps
@@ -215,7 +218,7 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
                                  Ty::Rec(common_free.clone(),
                                          only_b.values().map(|x| (**x).clone()).collect()));
             } else if ! only_b.is_empty() {
-                return Err(format!("Cannot unify {} and {}", a, b));
+                return Err(format!("Cannot unify {:?} and {:?}", a, b));
             }
 
             Ok(())
@@ -232,7 +235,7 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
                 // Unify with the option in a child_stage
                 let mut child_stage = Stage::new(stage);
 
-                try!(_unify(&mut child_stage, opt, &a));
+                try!(_unify(&mut child_stage, opt.clone(), a.clone()));
 
                 // Localsubs records all of the entries which are free in opt
                 let mut localsubs = HashMap::new();
@@ -260,7 +263,7 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
             }
 
             for (id, tys) in subs.iter() {
-                try!(_unify(stage, &Ty::Ident(id.clone()), &Ty::Union(tys.clone())));
+                try!(_unify(stage, Ty::Ident(id.clone()), Ty::Union(tys.clone())));
             }
 
             Ok(())
@@ -268,128 +271,129 @@ fn _unify<'a>(stage: &mut Stage<'a>, a: &Ty, b: &Ty) -> Result<(), String> {
         (&Ty::Union(_), &Ty::Rec(_, _)) => {
             // This simply delegates to the above branch.
             // It doesn't do it in the most efficient way, but that is OK
-            _unify(stage, &b, &a)
+            _unify(stage, b.clone(), a.clone())
         }
-        (&Ty::Union(ref aopts), &Ty::Union(ref bopts)) => {
-            // We need to find the intersection of the unions. kinda.
-            // Its complicated, and I'm probably going to do it wrong.
-            // Also, this will probably cause unacceptable growth of data
-            // structures, which sucks.
+        // (&Ty::Union(ref aopts), &Ty::Union(ref bopts)) => {
+        //     // We need to find the intersection of the unions. kinda.
+        //     // Its complicated, and I'm probably going to do it wrong.
+        //     // Also, this will probably cause unacceptable growth of data
+        //     // structures, which sucks.
 
-            // First, we need to determine what the final union will look like
-            // The final union will have stuff and things
-            // it will be awesome
-            // yeah
-            // woop!
+        //     // First, we need to determine what the final union will look like
+        //     // The final union will have stuff and things
+        //     // it will be awesome
+        //     // yeah
+        //     // woop!
 
-            #[deriving(Show)]
-            struct UniOpt<'a> {
-                aopt: &'a Ty,
-                bopt: &'a Ty,
-                tyvar: Ty,
-            }
+        //     #[derive(Show)]
+        //     struct UniOpt<'a> {
+        //         aopt: &'a Ty,
+        //         bopt: &'a Ty,
+        //         tyvar: Ty,
+        //     }
 
-            impl <'a> UniOpt<'a> {
-                fn flip(&self) -> UniOpt<'a> {
-                    UniOpt{
-                        aopt: self.bopt,
-                        bopt: self.aopt,
-                        tyvar: self.tyvar.clone()
-                    }
-                }
-            }
+        //     impl <'a> UniOpt<'a> {
+        //         fn flip(&self) -> UniOpt<'a> {
+        //             UniOpt{
+        //                 aopt: self.bopt,
+        //                 bopt: self.aopt,
+        //                 tyvar: self.tyvar.clone()
+        //             }
+        //         }
+        //     }
 
-            let mut uniopts = Vec::new();
+        //     let mut uniopts = Vec::new();
 
-            for aopt in aopts.iter() {
-                for bopt in bopts.iter() {
-                    // Check if these two can unify! We do this in a child
-                    // scope such that no modifications are made to the
-                    // actual global scope! (Very fancy!)
-                    // Rather, this only checks if the unification is possible.
+        //     for aopt in aopts.iter() {
+        //         for bopt in bopts.iter() {
+        //             // Check if these two can unify! We do this in a child
+        //             // scope such that no modifications are made to the
+        //             // actual global scope! (Very fancy!)
+        //             // Rather, this only checks if the unification is possible.
 
-                    // It shouldn't loop infinitely (I think), as it (kinda)
-                    // shares the same Unified hashmap.
-                    if _unify(&mut Stage::new(stage), aopt, bopt).is_ok() {
-                        uniopts.push(UniOpt{
-                            aopt: aopt,
-                            bopt: bopt,
-                            tyvar: stage.introduce_type_var()
-                        });
-                    }
-                }
-            }
+        //             // It shouldn't loop infinitely (I think), as it (kinda)
+        //             // shares the same Unified hashmap.
+        //             if _unify(&mut Stage::new(stage), aopt.clone(), bopt.clone()).is_ok() {
+        //                 uniopts.push(UniOpt{
+        //                     aopt: aopt,
+        //                     bopt: bopt,
+        //                     tyvar: stage.introduce_type_var()
+        //                 });
+        //             }
+        //         }
+        //     }
 
-            fn something<'a>(stage: &mut Stage<'a>, aopt: &Ty, uniopts: &Vec<UniOpt<'a>>) -> Result<(), String> {
-                let filtered = uniopts.iter().filter(|x| x.aopt == aopt);
+        //     fn something<'a>(stage: &mut Stage<'a>, aopt: &Ty, uniopts: &Vec<UniOpt<'a>>) -> Result<(), String> {
+        //         let filtered = uniopts.iter().filter(|x| x.aopt == aopt);
 
-                // unify the objects together, woo!
-                try!(_unify(stage, aopt,
-                            &Ty::Union(filtered.map(|x| x.bopt.clone()).collect())));
+        //         // unify the objects together, woo!
+        //         try!(_unify(stage, aopt.clone(),
+        //                     Ty::Union(filtered.map(|x| x.bopt.clone()).collect())));
 
-                // We need to monkey-patch the extension variable if it exists to the
-                // one which we want from the uniopts
+        //         // We need to monkey-patch the extension variable if it exists to the
+        //         // one which we want from the uniopts
 
-                // These first two conditionals are just checking invariants. We need
-                // to unwrap some data structures, and may as well make sure that
-                // some invariants are held along the way!
-                if let Some(ref extends) = aopt.get_extends() {
-                    let extends = extends.unwrap_ident();
-                    if let Some(ref union) = stage.lookup_type_var(&extends).cloned() {
-                        if let Ty::Union(ref opts) = *union {
-                            // Finally, we have reached the opts which were created by
-                            // the unification (hopefully?)
+        //         // These first two conditionals are just checking invariants. We need
+        //         // to unwrap some data structures, and may as well make sure that
+        //         // some invariants are held along the way!
+        //         if let Some(ref extends) = aopt.get_extends() {
+        //             let extends = extends.unwrap_ident();
+        //             if let Some(ref union) = stage.lookup_type_var(&extends).cloned() {
+        //                 if let Ty::Union(ref opts) = *union {
+        //                     // Finally, we have reached the opts which were created by
+        //                     // the unification (hopefully?)
 
-                            // We need to pair each opt with its uniopt
-                            let mut zipped =
-                                uniopts.iter().filter(|x| x.aopt == aopt).zip(opts.iter());
-                            for (uniopt, opt) in zipped {
-                                // Unify the uniopt's tyvar with the opt's extension,
-                                // This ensures that the two sides will use the same tyvar
-                                match *opt {
-                                    Ty::Rec(Some(box ref extends), _) => {
-                                        try!(_unify(stage, extends, &uniopt.tyvar));
-                                    }
-                                    Ty::Rec(None, _) => {/* Can this happen? */}
-                                    Ty::Ident(_) => {
-                                        try!(_unify(stage, aopt, opt));
-                                    }
-                                    _ => unreachable!("Invariant")
-                                }
-                            }
-                            Ok(())
-                        } else {
-                            // Umm, I guess we don't need to worry about that anymore? I'm not sure...
-                            Ok(())
-                        }
-                    } else {
-                        Err("Can't unify, because we're missing stuff! woop! I'm not sure what went wrong, lets find out later".to_string())
-                    }
-                } else {
-                    // It looks like every element in the other side unified just fine?
-                    // Let's just do nothing for now. In the future we may need to
-                    // do some extra work to verify correctness n' stuff
-                    Ok(())
-                }
-            }
+        //                     // We need to pair each opt with its uniopt
+        //                     let mut zipped =
+        //                         uniopts.iter().filter(|x| x.aopt == aopt).zip(opts.iter());
+        //                     for (uniopt, opt) in zipped {
+        //                         // Unify the uniopt's tyvar with the opt's extension,
+        //                         // This ensures that the two sides will use the same tyvar
+        //                         match *opt {
+        //                             Ty::Rec(Some(box ref extends), _) => {
+        //                                 try!(_unify(stage, extends.clone(), uniopt.tyvar.clone()));
+        //                             }
+        //                             Ty::Rec(None, _) => {/* Can this happen? */}
+        //                             Ty::Ident(_) => {
+        //                                 try!(_unify(stage, aopt.clone(), opt.clone()));
+        //                             }
+        //                             _ => unreachable!("Invariant")
+        //                         }
+        //                     }
+        //                     Ok(())
+        //                 } else {
+        //                     // Umm, I guess we don't need to worry about that anymore? I'm not sure...
+        //                     Ok(())
+        //                 }
+        //             } else {
+        //                 Err("Can't unify, because we're missing stuff! woop! I'm not sure what went wrong, lets find out later".to_string())
+        //             }
+        //         } else {
+        //             // It looks like every element in the other side unified just fine?
+        //             // Let's just do nothing for now. In the future we may need to
+        //             // do some extra work to verify correctness n' stuff
+        //             Ok(())
+        //         }
+        //     }
 
-            for aopt in aopts.iter() {
-                try!(something(stage, aopt, &uniopts));
-            }
+        //     for aopt in aopts.iter() {
+        //         try!(something(stage, aopt, &uniopts));
+        //     }
 
-            for bopt in bopts.iter() {
-                try!(something(stage, bopt, &uniopts.iter().map(|x| x.flip()).collect()));
-            }
+        //     for bopt in bopts.iter() {
+        //         try!(something(stage, bopt, &uniopts.iter().map(|x| x.flip()).collect()));
+        //     }
 
-            Ok(())
-        }
+        //     Ok(())
+        // }
+        _ => panic!("TEMPORARY TESTING!")
     }
 }
 
 pub fn unify<'a>(env: &mut (Env + 'a), a: &Ty, b: &Ty) -> Result<(), String> {
     let mut stage = Stage::new(env);
 
-    try!(_unify(&mut stage, a, b));
+    try!(_unify(&mut stage, a.clone(), b.clone()));
 
     stage.apply();
     Ok(())

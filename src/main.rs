@@ -1,20 +1,22 @@
-#![feature(phase, macro_rules, globs)]
+// TODO: Box syntax :'(
+#![feature(plugin, box_syntax)]
 
 // We're going to use a lot of regular expressions
-#[phase(plugin)]
+#[plugin]
 extern crate regex_macros;
 extern crate regex;
 
-// Logging macros
-#[phase(plugin, link)]
-extern crate log;
+#[macro_use]
+extern crate lazy_static;
 
-// Interned Strings (from servo)
-extern crate string_cache;
+// Logging macros
+#[macro_use]
+extern crate log;
 
 // LLVM bindings (from rustc)
 extern crate rustc_llvm;
 
+pub mod intern;
 pub mod scope;
 pub mod lexer;
 pub mod parser;
@@ -33,15 +35,15 @@ fn infer_types_for_code(code: &str) {
     match tokens {
         Ok(rawtoks) => {
             let ast = parser::parse_program(&mut parser::State::new(rawtoks.as_slice()));
-            info!("Tokens: {}", rawtoks);
+            info!("Tokens: {:?}", rawtoks);
             match ast {
                 Ok(rawast) => {
-                    info!("AST: {}", rawast);
+                    info!("AST: {:?}", rawast);
                     let inferred_types = infer::infer_program(rawast);
                     match inferred_types {
                         Ok(ref types) => {
-                            info!("Unsimplified: {}", inferred_types);
-                            println!("{}", simplify::simplify(types));
+                            info!("Unsimplified: {:?}", inferred_types);
+                            println!("{:?}", simplify::simplify(types));
                         }
                         Err(err) => {
                             println!("Error inferring types: {}", err);

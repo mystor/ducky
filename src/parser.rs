@@ -5,19 +5,19 @@ use il::{Expr, Prop, Ident, Symbol, Literal, Stmt, Ty, TyProp};
 // TODO: Desugaring shouldn't happen inline!
 
 macro_rules! expect {
-    ($st:expr ~ $patt:pat) => {
+    ($st:expr, $patt:pat) => {
         match $st.peek() {
             Some(& $patt) => { $st.eat(); },
-            unexpected => { return Err(format!("Unexpected {}! {}", unexpected, line!())); }
+            unexpected => { return Err(format!("Unexpected {:?}! {:?}", unexpected, line!())); }
         }
     };
-    ($st:expr ~ $patt:pat => $expr:expr) => {
+    ($st:expr, $patt:pat => $expr:expr) => {
         match $st.peek() {
             Some(& $patt) => {
                 $st.eat();
                 $expr
             },
-            unexpected  => { return Err(format!("Unexpected {}! {}", unexpected, line!())); }
+            unexpected  => { return Err(format!("Unexpected {:?}! {:?}", unexpected, line!())); }
         }
     }
 }
@@ -37,11 +37,11 @@ impl<'a> State<'a> {
     }
 
     fn peek(&self) -> Option<&'a Token> {
-        self.tokens.head()
+        self.tokens.first()
     }
 
     fn eat(&mut self) -> Option<&'a Token> {
-        let tok = self.tokens.head();
+        let tok = self.tokens.first();
         self.tokens = self.tokens.tail();
         tok
     }
@@ -52,8 +52,8 @@ pub fn parse_stmt<'a>(st: &mut State<'a>) -> Result<Stmt, String> {
         Some(&LET) => { // let IDENT = EXPR
             st.eat();
             // Get the identifier
-            expect!(st ~ IDENT(ref ident) => {
-                expect!(st ~ EQ => {
+            expect!(st, IDENT(ref ident) => {
+                expect!(st, EQ => {
                     let expr = try!(parse_expr(st));
                     Ok(Stmt::Let(Ident::from_atom(ident), expr))
                 })
@@ -153,23 +153,23 @@ fn parse_deref<'a>(st: &mut State<'a>) -> Result<Expr, String> {
         match st.peek() {
             Some(&DOT) => {
                 st.eat();
-                expect!(st ~ IDENT(ref ident) => {
+                expect!(st, IDENT(ref ident) => {
                     lhs = Expr::Member(box lhs, Symbol::from_atom(ident));
                 })
             }
             Some(&COLON) => {
                 st.eat();
-                expect!(st ~ IDENT(ref ident) => {
-                    expect!(st ~ LPAREN);
+                expect!(st, IDENT(ref ident) => {
+                    expect!(st, LPAREN);
                     let args = try!(parse_args(st));
-                    expect!(st ~ RPAREN);
+                    expect!(st, RPAREN);
                     lhs = Expr::Call(box lhs, Symbol::from_atom(ident), args);
                 })
             }
             Some(&LPAREN) => {
                 st.eat();
                 let args = try!(parse_args(st));
-                expect!(st ~ RPAREN);
+                expect!(st, RPAREN);
                 lhs = Expr::Call(box lhs, Symbol::from_slice("call"), args);
             }
             Some(&LBRACKET) => {
@@ -228,9 +228,9 @@ fn parse_value<'a>(st: &mut State<'a>) -> Result<Expr, String> {
     match st.peek() {
         Some(&FN) => { // Function Literal
             st.eat();
-            expect!(st ~ LPAREN);
+            expect!(st, LPAREN);
             let params = try!(parse_params(st));
-            expect!(st ~ RPAREN);
+            expect!(st, RPAREN);
             let body = try!(parse_block_expr(st));
 
             Ok(Expr::Rec(vec![
@@ -251,7 +251,7 @@ fn parse_value<'a>(st: &mut State<'a>) -> Result<Expr, String> {
         Some(&LBRACE) => { // Object Literal
             st.eat();
             let props = try!(parse_props(st));
-            expect!(st ~ RBRACE);
+            expect!(st, RBRACE);
 
             Ok(Expr::Rec(props))
         }
@@ -281,14 +281,14 @@ fn parse_value<'a>(st: &mut State<'a>) -> Result<Expr, String> {
             Ok(Expr::Literal(Literal::Bool(false)))
         }
 
-        unexpected => Err(format!("Unexpected {}!", unexpected)),
+        unexpected => Err(format!("Unexpected {:?}!", unexpected)),
     }
 }
 
 fn parse_block_expr<'a>(st: &mut State<'a>) -> Result<Expr, String> {
-    expect!(st ~ LBRACE);
+    expect!(st, LBRACE);
     let stmts = try!(parse_stmts(st));
-    expect!(st ~ RBRACE);
+    expect!(st, RBRACE);
     Ok(Expr::Block(stmts))
 }
 
@@ -298,10 +298,10 @@ fn parse_props<'a>(st: &mut State<'a>) -> Result<Vec<Prop>, String> {
         match st.peek() {
             Some(&FN) => {
                 st.eat();
-                expect!(st ~ IDENT(ref ident) => {
-                    expect!(st ~ LPAREN);
+                expect!(st, IDENT(ref ident) => {
+                    expect!(st, LPAREN);
                     let params = try!(parse_params(st));
-                    expect!(st ~ RPAREN);
+                    expect!(st, RPAREN);
                     let body = try!(parse_block_expr(st));
 
                     props.push(Prop::Method(Symbol::from_atom(ident), params, body));
@@ -309,7 +309,7 @@ fn parse_props<'a>(st: &mut State<'a>) -> Result<Vec<Prop>, String> {
             },
             Some(&IDENT(ref ident)) => {
                 st.eat();
-                expect!(st ~ COLON);
+                expect!(st, COLON);
                 let value = try!(parse_expr(st));
 
                 props.push(Prop::Val(Symbol::from_atom(ident), value));
@@ -342,10 +342,10 @@ fn parse_ty<'a>(st: &mut State<'a>) -> Result<Ty, String> {
         Some(&FN) => {
             st.eat();
             // Function Type
-            expect!(st ~ LBRACKET);
+            expect!(st, LBRACKET);
             let param_tys = try!(parse_paramtys(st));
-            expect!(st ~ RBRACKET);
-            expect!(st ~ RARROW);
+            expect!(st, RBRACKET);
+            expect!(st, RARROW);
             let result_type = try!(parse_ty(st));
 
             Ok(Ty::Rec(None,
@@ -359,7 +359,7 @@ fn parse_ty<'a>(st: &mut State<'a>) -> Result<Ty, String> {
             st.eat();
             // Record Type
             let props = try!(parse_proptys(st));
-            expect!(st ~ RBRACE);
+            expect!(st, RBRACE);
 
             Ok(Ty::Rec(None, props))
         }
@@ -385,7 +385,7 @@ fn parse_ty<'a>(st: &mut State<'a>) -> Result<Ty, String> {
                 }
             }
         }
-        unexpected => Err(format!("Unexpected {}!", unexpected)),
+        unexpected => Err(format!("Unexpected {:?}!", unexpected)),
     }
 }
 
@@ -417,10 +417,10 @@ fn parse_proptys<'a>(st: &mut State<'a>) -> Result<Vec<TyProp>, String> {
         match st.peek() {
             Some(&FN) => {
                 st.eat();
-                expect!(st ~ IDENT(ref ident) => {
-                    expect!(st ~ LPAREN);
+                expect!(st, IDENT(ref ident) => {
+                    expect!(st, LPAREN);
                     let params = try!(parse_paramtys(st));
-                    expect!(st ~ RPAREN);
+                    expect!(st, RPAREN);
                     let body = try!(parse_ty(st));
 
                     props.push(TyProp::Method(Symbol::from_atom(ident), params, body));
@@ -428,7 +428,7 @@ fn parse_proptys<'a>(st: &mut State<'a>) -> Result<Vec<TyProp>, String> {
             },
             Some(&IDENT(ref ident)) => {
                 st.eat();
-                expect!(st ~ COLON);
+                expect!(st, COLON);
                 let value = try!(parse_ty(st));
 
                 props.push(TyProp::Val(Symbol::from_atom(ident), value));
