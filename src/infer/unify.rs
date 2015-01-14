@@ -15,7 +15,7 @@ struct Stage<'a> {
 }
 
 impl <'a> Stage<'a> {
-    fn new(env: &'a mut (Env + 'a)) -> Stage<'a> {
+    fn new<'b>(env: &'b mut (Env + 'b)) -> Stage<'b> {
         Stage{
             env: env,
             subs: HashMap::new(),

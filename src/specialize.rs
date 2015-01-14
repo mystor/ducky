@@ -1,6 +1,6 @@
+#![allow(dead_code)]
 use intern::Atom;
-use std::fmt;
-use std::collections::{HashMap, HashSet, BTreeMap};
+use std::collections::{HashMap, BTreeMap};
 use il::*;
 
 /// A MethodImpl represents the implementation of a method. Each MethodImpl
@@ -134,7 +134,7 @@ impl ExprImpl {
             // We s
             ExprImpl::Ident(..) => panic!("Shit, who even knows!?!?!?!"),
             ExprImpl::Member{ref rimpl, ref symb, ..} => {
-                let props = rimpl.props;
+                let props = &rimpl.props;
                 if let Some(val) = props.get(symb) {val.clone()} else { panic!("FUCK"); }
             },
             ExprImpl::Call{ref mspec, ..} => mspec.return_valimpl.clone(),

@@ -1,3 +1,5 @@
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
 use std::collections::{HashMap, HashSet};
 use intern::Atom;
@@ -20,47 +22,17 @@ pub trait Env {
     fn as_infervalue(&self) -> InferValue;
 }
 
-#[derive(Show, Clone)]
-struct Environment {
+#[derive(Show)]
+pub struct Scope {
     data_vars: HashMap<Ident, Ty>,
     type_vars: HashMap<Ident, Ty>,
     counter: u32,
+
+    bound_vars: Vec<HashSet<Ident>>,
 }
 
-#[derive(Show)]
-enum MOE<'a> {
-    Owned(Environment),
-    Shared(&'a mut Scope<'a>),
-}
-
-impl <'a> Deref for MOE<'a> {
-    type Target = Environment;
-
-    fn deref<'b>(&'b self) -> &'b Environment {
-        match *self {
-            MOE::Owned(ref env) => env,
-            MOE::Shared(ref scope) => scope.env.deref(),
-        }
-    }
-}
-
-impl <'a> DerefMut for MOE<'a> {
-    fn deref_mut<'b>(&'b mut self) -> &'b mut Environment {
-        match *self {
-            MOE::Owned(ref mut env) => env,
-            MOE::Shared(ref mut scope) => scope.env.deref_mut(),
-        }
-    }
-}
-
-#[derive(Show)]
-pub struct Scope<'a> {
-    env: MOE<'a>,
-    bound_vars: HashSet<Ident>,
-}
-
-impl <'a>Scope<'a> {
-    pub fn new() -> Scope<'static> {
+impl Scope {
+    pub fn new() -> Scope {
         // Type Variables
         let mut type_vars = HashMap::new();
 
@@ -75,34 +47,32 @@ impl <'a>Scope<'a> {
                                                            vec![Ty::Ident(Ident::from_builtin_slice("Int"))],
                                                            Ty::Ident(Ident::from_builtin_slice("Int")))]));
 
-        Scope{
-            env: MOE::Owned(Environment{
-                type_vars: type_vars,
-                data_vars: HashMap::new(),
-                counter: 0,
-            }),
-            bound_vars: HashSet::new(),
+        Scope {
+            type_vars: type_vars,
+            data_vars: HashMap::new(),
+            counter: 0,
+
+            bound_vars: vec![HashSet::new()],
         }
     }
 
-    pub fn new_child<'b: 'a>(&'b mut self, bound_vars: HashSet<Ident>) -> Scope<'b> {
+    pub fn push_child(&mut self, bound_vars: HashSet<Ident>) {
         // Also add all free variables in the bound vars to the list of bound vars!
         let bvs = bound_vars.iter().fold(HashSet::new(), |mut v, bv| {
             v.extend(free_vars(self, &Ty::Ident(bv.clone())).iter().cloned());
             v
         });
 
-        Scope{
-            env: MOE::Shared(self),
-            bound_vars: bvs,
-        }
+        self.bound_vars.push(bvs);
+    }
+
+    pub fn pop_child(&mut self) {
+        self.bound_vars.pop();
     }
 
     fn is_bound(&self, var: &Ident) -> bool {
-        self.bound_vars.contains(var) || match self.env {
-            MOE::Shared(ref parent) => parent.is_bound(var),
-            _ => false,
-        }
+        // Theoretically should be done in reverse, but makes no difference
+        self.bound_vars.iter().any(|bv| bv.contains(var))
     }
 
     pub fn instantiate(&mut self, ty: &Ty, mappings: &mut HashMap<Ident, Ty>) -> Ty {
@@ -158,29 +128,29 @@ impl <'a>Scope<'a> {
     }
 
     fn maybe_bind(&mut self, id: &Ident, maybe_binds: &[Ident]) {
-        if self.bound_vars.contains(id) {
-            self.bound_vars.extend(maybe_binds.iter().cloned());
-        } else {
-            match self.env {
-                MOE::Shared(ref mut scope) => scope.maybe_bind(id, maybe_binds),
-                _ => panic!(),
+        for bv in self.bound_vars.iter_mut().rev() {
+            if bv.contains(id) {
+                bv.extend(maybe_binds.iter().cloned());
+                return;
             }
         }
+
+        panic!()
     }
 }
 
-impl <'a> Env for Scope<'a> {
+impl Env for Scope {
     fn lookup_type_var(&self, id: &Ident) -> Option<&Ty> {
-        self.env.type_vars.get(id)
+        self.type_vars.get(id)
     }
 
     fn lookup_data_var(&mut self, id: &Ident) -> Ty {
-        if let Some(ty) = self.env.data_vars.get(id) {
+        if let Some(ty) = self.data_vars.get(id) {
             return ty.clone();
         }
 
         let ty = self.introduce_type_var();
-        self.env.data_vars.insert(id.clone(), ty.clone());
+        self.data_vars.insert(id.clone(), ty.clone());
         ty
     }
 
@@ -188,18 +158,18 @@ impl <'a> Env for Scope<'a> {
     fn introduce_type_var(&mut self) -> Ty {
         // TODO: Currently these names are awful
         let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-        let id = chars.slice_chars(self.env.counter as usize % chars.len(),
-                                   self.env.counter as usize % chars.len() + 1);
-        self.env.counter += 1;
+        let id = chars.slice_chars(self.counter as usize % chars.len(),
+                                   self.counter as usize % chars.len() + 1);
+        self.counter += 1;
 
-        Ty::Ident(Ident(Atom::from_slice(id), Internal(self.env.counter)))
+        Ty::Ident(Ident(Atom::from_slice(id), Internal(self.counter)))
     }
 
     // Perform a substitution (bind the type variable id)
     // id _must_ be unbound at the point of substitution
     fn substitute(&mut self, id: Ident, ty: Ty) {
         // Substitute the type variable
-        let prev = self.env.type_vars.insert(id.clone(), ty.clone());
+        let prev = self.type_vars.insert(id.clone(), ty.clone());
 
         if self.is_bound(&id) {
             // Determine what new variables have to be bound
@@ -217,8 +187,8 @@ impl <'a> Env for Scope<'a> {
     fn as_infervalue(&self) -> InferValue {
         // TODO: Remove
         InferValue{
-            data_vars: self.env.data_vars.clone(),
-            type_vars: self.env.type_vars.clone(),
+            data_vars: self.data_vars.clone(),
+            type_vars: self.type_vars.clone(),
         }
     }
 }

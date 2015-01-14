@@ -1,5 +1,5 @@
 // TODO: Box syntax :'(
-#![feature(plugin, box_syntax)]
+#![feature(plugin, box_syntax, slicing_syntax)]
 
 // We're going to use a lot of regular expressions
 #[plugin]
@@ -34,7 +34,7 @@ fn infer_types_for_code(code: &str) {
     let tokens = lexer::lex(code);
     match tokens {
         Ok(rawtoks) => {
-            let ast = parser::parse_program(&mut parser::State::new(rawtoks.as_slice()));
+            let ast = parser::parse_program(&mut parser::State::new(&rawtoks[]));
             info!("Tokens: {:?}", rawtoks);
             match ast {
                 Ok(rawast) => {

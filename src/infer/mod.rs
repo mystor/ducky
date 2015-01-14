@@ -1,5 +1,5 @@
 use std::fmt;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use intern::Atom;
 use il::*;
 use self::env::{Scope, Env};
@@ -35,17 +35,21 @@ impl fmt::Show for InferValue {
 }
 
 
-fn infer_body<'a, 'b: 'a>(scope: &'b mut Scope<'a>, params: &Vec<Ident>, body: &Expr) -> Result<Ty, String> {
+fn infer_body(scope: &mut Scope, params: &Vec<Ident>, body: &Expr) -> Result<Ty, String> {
     let bound = params.iter().map(|x| {
         if let Ty::Ident(id) = scope.lookup_data_var(x) {
             id
         } else { unreachable!() }
     }).collect();
 
-    infer_expr(&mut scope.new_child(bound), body)
+    scope.push_child(bound);
+    let res = infer_expr(scope, body);
+    scope.pop_child();
+
+    res
 }
 
-pub fn infer_expr<'a, 'b: 'a>(scope: &'b mut Scope<'a>, e: &Expr) -> Result<Ty, String> {
+pub fn infer_expr(scope: &mut Scope, e: &Expr) -> Result<Ty, String> {
     match *e {
         Expr::Literal(ref lit) => { Ok(util::val_ty(scope, lit.ty())) } // We probably can just inline that
         Expr::Ident(ref ident) => {
@@ -151,7 +155,7 @@ pub fn infer_expr<'a, 'b: 'a>(scope: &'b mut Scope<'a>, e: &Expr) -> Result<Ty, 
     }
 }
 
-pub fn infer_stmt<'a, 'b: 'a>(scope: &'b mut Scope<'a>, stmt: &Stmt) -> Result<(), String> {
+pub fn infer_stmt(scope: &mut Scope, stmt: &Stmt) -> Result<(), String> {
     match *stmt {
         Stmt::Expr(ref expr) => {
             try!(infer_expr(scope, expr));

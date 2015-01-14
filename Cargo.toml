@@ -8,8 +8,8 @@ readme = "README.md"
 
 [dependencies]
 
-regex = "0.1.10"
-regex_macros = "0.1.5"
+regex = "0.1.*"
+regex_macros = "0.1.*"
 lazy_static = "0.1.*"
 
 [[bin]]

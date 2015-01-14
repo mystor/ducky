@@ -18,7 +18,7 @@ fn infer_err(code: &str) {
     match infer_code(code) {
         Ok(istate) => {
             // TODO: Maybe simplify the types before displaying them?
-            panic!("\nUnexpected success inferring types for code:\n\n{}\n\n{}\n", code, istate);
+            panic!("\nUnexpected success inferring types for code:\n\n{}\n\n{:?}\n", code, istate);
         }
         Err(_) => {}
     }
