@@ -62,6 +62,7 @@ fn infer_types_for_code(code: &str) {
     }
 }
 
+#[allow(dead_code)]
 fn main() {
     // Records!
     infer_types_for_code(r#"

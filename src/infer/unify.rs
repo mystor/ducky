@@ -273,120 +273,118 @@ fn _unify<'a, 'b>(stage: &'a mut Stage<'b>, a: Ty, b: Ty) -> Result<(), String> 
             // It doesn't do it in the most efficient way, but that is OK
             _unify(stage, b.clone(), a.clone())
         }
-        // (&Ty::Union(ref aopts), &Ty::Union(ref bopts)) => {
-        //     // We need to find the intersection of the unions. kinda.
-        //     // Its complicated, and I'm probably going to do it wrong.
-        //     // Also, this will probably cause unacceptable growth of data
-        //     // structures, which sucks.
+        (&Ty::Union(ref aopts), &Ty::Union(ref bopts)) => {
+            // We need to find the intersection of the unions. kinda.
+            // Its complicated, and I'm probably going to do it wrong.
+            // Also, this will probably cause unacceptable growth of data
+            // structures, which sucks.
 
-        //     // First, we need to determine what the final union will look like
-        //     // The final union will have stuff and things
-        //     // it will be awesome
-        //     // yeah
-        //     // woop!
+            // First, we need to determine what the final union will look like
+            // The final union will have stuff and things
+            // it will be awesome
+            // yeah
+            // woop!
 
-        //     #[derive(Show)]
-        //     struct UniOpt<'a> {
-        //         aopt: &'a Ty,
-        //         bopt: &'a Ty,
-        //         tyvar: Ty,
-        //     }
+            #[derive(Show)]
+            struct UniOpt<'a> {
+                aopt: Ty,
+                bopt: Ty,
+                tyvar: Ty,
+            }
 
-        //     impl <'a> UniOpt<'a> {
-        //         fn flip(&self) -> UniOpt<'a> {
-        //             UniOpt{
-        //                 aopt: self.bopt,
-        //                 bopt: self.aopt,
-        //                 tyvar: self.tyvar.clone()
-        //             }
-        //         }
-        //     }
+            impl <'a> UniOpt<'a> {
+                fn flip(&self) -> UniOpt<'a> {
+                    UniOpt{
+                        aopt: self.bopt.clone(),
+                        bopt: self.aopt.clone(),
+                        tyvar: self.tyvar.clone()
+                    }
+                }
+            }
 
-        //     let mut uniopts = Vec::new();
+            let mut uniopts = Vec::new();
 
-        //     for aopt in aopts.iter() {
-        //         for bopt in bopts.iter() {
-        //             // Check if these two can unify! We do this in a child
-        //             // scope such that no modifications are made to the
-        //             // actual global scope! (Very fancy!)
-        //             // Rather, this only checks if the unification is possible.
+            for aopt in aopts.iter() {
+                for bopt in bopts.iter() {
+                    // Check if these two can unify! We do this in a child
+                    // scope such that no modifications are made to the
+                    // actual global scope! (Very fancy!)
+                    // Rather, this only checks if the unification is possible.
 
-        //             // It shouldn't loop infinitely (I think), as it (kinda)
-        //             // shares the same Unified hashmap.
-        //             if _unify(&mut Stage::new(stage), aopt.clone(), bopt.clone()).is_ok() {
-        //                 uniopts.push(UniOpt{
-        //                     aopt: aopt,
-        //                     bopt: bopt,
-        //                     tyvar: stage.introduce_type_var()
-        //                 });
-        //             }
-        //         }
-        //     }
+                    // It shouldn't loop infinitely (I think), as it (kinda)
+                    // shares the same Unified hashmap.
+                    if _unify(&mut Stage::new(stage), aopt.clone(), bopt.clone()).is_ok() {
+                        uniopts.push(UniOpt{
+                            aopt: aopt.clone(),
+                            bopt: bopt.clone(),
+                            tyvar: stage.introduce_type_var()
+                        });
+                    }
+                }
+            }
 
-        //     fn something<'a>(stage: &mut Stage<'a>, aopt: &Ty, uniopts: &Vec<UniOpt<'a>>) -> Result<(), String> {
-        //         let filtered = uniopts.iter().filter(|x| x.aopt == aopt);
+            fn something<'a>(stage: &mut Stage<'a>, aopt: &Ty, uniopts: &Vec<UniOpt<'a>>) -> Result<(), String> {
+                let filtered = uniopts.iter().filter(|x| x.aopt == *aopt);
 
-        //         // unify the objects together, woo!
-        //         try!(_unify(stage, aopt.clone(),
-        //                     Ty::Union(filtered.map(|x| x.bopt.clone()).collect())));
+                // unify the objects together, woo!
+                try!(_unify(stage, aopt.clone(),
+                            Ty::Union(filtered.map(|x| x.bopt.clone()).collect())));
 
-        //         // We need to monkey-patch the extension variable if it exists to the
-        //         // one which we want from the uniopts
+                // We need to monkey-patch the extension variable if it exists to the
+                // one which we want from the uniopts
 
-        //         // These first two conditionals are just checking invariants. We need
-        //         // to unwrap some data structures, and may as well make sure that
-        //         // some invariants are held along the way!
-        //         if let Some(ref extends) = aopt.get_extends() {
-        //             let extends = extends.unwrap_ident();
-        //             if let Some(ref union) = stage.lookup_type_var(&extends).cloned() {
-        //                 if let Ty::Union(ref opts) = *union {
-        //                     // Finally, we have reached the opts which were created by
-        //                     // the unification (hopefully?)
+                // These first two conditionals are just checking invariants. We need
+                // to unwrap some data structures, and may as well make sure that
+                // some invariants are held along the way!
+                if let Some(ref extends) = aopt.get_extends() {
+                    let extends = extends.unwrap_ident();
+                    if let Some(ref union) = stage.lookup_type_var(&extends).cloned() {
+                        if let Ty::Union(ref opts) = *union {
+                            // Finally, we have reached the opts which were created by
+                            // the unification (hopefully?)
 
-        //                     // We need to pair each opt with its uniopt
-        //                     let mut zipped =
-        //                         uniopts.iter().filter(|x| x.aopt == aopt).zip(opts.iter());
-        //                     for (uniopt, opt) in zipped {
-        //                         // Unify the uniopt's tyvar with the opt's extension,
-        //                         // This ensures that the two sides will use the same tyvar
-        //                         match *opt {
-        //                             Ty::Rec(Some(box ref extends), _) => {
-        //                                 try!(_unify(stage, extends.clone(), uniopt.tyvar.clone()));
-        //                             }
-        //                             Ty::Rec(None, _) => {/* Can this happen? */}
-        //                             Ty::Ident(_) => {
-        //                                 try!(_unify(stage, aopt.clone(), opt.clone()));
-        //                             }
-        //                             _ => unreachable!("Invariant")
-        //                         }
-        //                     }
-        //                     Ok(())
-        //                 } else {
-        //                     // Umm, I guess we don't need to worry about that anymore? I'm not sure...
-        //                     Ok(())
-        //                 }
-        //             } else {
-        //                 Err("Can't unify, because we're missing stuff! woop! I'm not sure what went wrong, lets find out later".to_string())
-        //             }
-        //         } else {
-        //             // It looks like every element in the other side unified just fine?
-        //             // Let's just do nothing for now. In the future we may need to
-        //             // do some extra work to verify correctness n' stuff
-        //             Ok(())
-        //         }
-        //     }
+                            // We need to pair each opt with its uniopt
+                            let mut zipped =
+                                uniopts.iter().filter(|x| x.aopt == *aopt).zip(opts.iter());
+                            for (uniopt, opt) in zipped {
+                                // Unify the uniopt's tyvar with the opt's extension,
+                                // This ensures that the two sides will use the same tyvar
+                                match *opt {
+                                    Ty::Rec(Some(box ref extends), _) => {
+                                        try!(_unify(stage, extends.clone(), uniopt.tyvar.clone()));
+                                    }
+                                    Ty::Rec(None, _) => {/* Can this happen? */}
+                                    Ty::Ident(_) => {
+                                        try!(_unify(stage, aopt.clone(), opt.clone()));
+                                    }
+                                    _ => unreachable!("Invariant")
+                                }
+                            }
+                            Ok(())
+                        } else {
+                            // Umm, I guess we don't need to worry about that anymore? I'm not sure...
+                            Ok(())
+                        }
+                    } else {
+                        Err("Can't unify, because we're missing stuff! woop! I'm not sure what went wrong, lets find out later".to_string())
+                    }
+                } else {
+                    // It looks like every element in the other side unified just fine?
+                    // Let's just do nothing for now. In the future we may need to
+                    // do some extra work to verify correctness n' stuff
+                    Ok(())
+                }
+            }
 
-        //     for aopt in aopts.iter() {
-        //         try!(something(stage, aopt, &uniopts));
-        //     }
+            for aopt in aopts.iter() {
+                try!(something(stage, aopt, &uniopts));
+            }
+            for bopt in bopts.iter() {
+                try!(something(stage, bopt, &uniopts.iter().map(|x| x.flip()).collect()));
+            }
 
-        //     for bopt in bopts.iter() {
-        //         try!(something(stage, bopt, &uniopts.iter().map(|x| x.flip()).collect()));
-        //     }
-
-        //     Ok(())
-        // }
-        _ => panic!("TEMPORARY TESTING!")
+            Ok(())
+        }
     }
 }
 
