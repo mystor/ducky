@@ -79,7 +79,7 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
         if let Some((0, len)) = regex!(r"^\s+").find(stream) {
             // Skip all spaces
             stream = stream.slice_from(len);
-        } else if let Some(tok) = nom!(stream |v| -> {
+        } else if let Some(tok) = nom!(stream |_v| -> {
             // Brackets, Braces, and Parens
             r"^\{" => { LBRACE },
             r"^\}" => { RBRACE },
@@ -123,19 +123,19 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
 
             // The interesting ones
             r"^[a-zA-Z_][a-zA-Z0-9_]*" => {
-                match v {
+                match _v {
                     "fn" => FN,
                     "let" => LET,
                     "true" => TRUE,
                     "false" => FALSE,
                     "if" => IF,
                     "else" => ELSE,
-                    _ => IDENT(Atom::from_slice(v)),
+                    _ => IDENT(Atom::from_slice(_v)),
                 }
             },
-            r#"^"([^"]|\\")""# => { LIT_STR(Atom::from_slice(v)) }, // TODO: Better string parsing
-            r"^[0-9]*\.[0-9]+" => { LIT_FLOAT(FromStr::from_str(v).unwrap()) },
-            r"^[0-9]+" => { LIT_INTEGER(FromStr::from_str(v).unwrap()) }
+            r#"^"([^"]|\\")""# => { LIT_STR(Atom::from_slice(_v)) }, // TODO: Better string parsing
+            r"^[0-9]*\.[0-9]+" => { LIT_FLOAT(FromStr::from_str(_v).unwrap()) },
+            r"^[0-9]+" => { LIT_INTEGER(FromStr::from_str(_v).unwrap()) }
         }) {
             toks.push(tok);
         } else {

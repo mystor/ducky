@@ -1,5 +1,5 @@
 use std::fmt;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use intern::Atom;
 use il::*;
 use self::env::{Scope, Env};

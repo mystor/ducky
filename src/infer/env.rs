@@ -1,6 +1,3 @@
-use std::rc::Rc;
-use std::cell::RefCell;
-use std::ops::{Deref, DerefMut};
 use std::collections::{HashMap, HashSet};
 use intern::Atom;
 use il::*;

@@ -1,5 +1,6 @@
 // TODO: Box syntax :'(
 #![feature(plugin, box_syntax, slicing_syntax)]
+#![allow(unstable)]
 
 // We're going to use a lot of regular expressions
 #[plugin]

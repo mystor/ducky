@@ -4,7 +4,7 @@ use std::fmt;
 // TODO: Namespace Context
 pub use self::Context::*;
 
-#[derive(Show, PartialEq, Eq, Hash, Clone)]
+#[derive(Show, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Context {
     Internal(u32),
     BuiltIn,

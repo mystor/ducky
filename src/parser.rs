@@ -337,6 +337,7 @@ fn parse_stmts<'a>(st: &mut State<'a>) -> Result<Vec<Stmt>, String> {
     Ok(stmts)
 }
 
+#[allow(dead_code)]
 fn parse_ty<'a>(st: &mut State<'a>) -> Result<Ty, String> {
     match st.peek() {
         Some(&FN) => {
@@ -389,6 +390,7 @@ fn parse_ty<'a>(st: &mut State<'a>) -> Result<Ty, String> {
     }
 }
 
+#[allow(dead_code)]
 fn parse_paramtys<'a>(st: &mut State<'a>) -> Result<Vec<Ty>, String> {
     let mut paramtys = vec![];
 
@@ -410,6 +412,7 @@ fn parse_paramtys<'a>(st: &mut State<'a>) -> Result<Vec<Ty>, String> {
     Ok(paramtys)
 }
 
+#[allow(dead_code)]
 fn parse_proptys<'a>(st: &mut State<'a>) -> Result<Vec<TyProp>, String> {
     let mut props = vec![];
 
