@@ -81,45 +81,45 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
             stream = stream.slice_from(len);
         } else if let Some(tok) = nom!(stream |_v| -> {
             // Brackets, Braces, and Parens
-            r"^\{" => { LBRACE },
-            r"^\}" => { RBRACE },
-            r"^\(" => { LPAREN },
-            r"^\)" => { RPAREN },
-            r"^\[" => { LBRACKET },
-            r"^\]" => { RBRACKET },
+            r"^\{" => LBRACE,
+            r"^\}" => RBRACE,
+            r"^\(" => LPAREN,
+            r"^\)" => RPAREN,
+            r"^\[" => LBRACKET,
+            r"^\]" => RBRACKET,
 
             // Arrows
-            r"^->" => { RARROW },
-            r"^<-" => { LARROW },
-            r"^=>" => { FAT_ARROW },
+            r"^->" => RARROW,
+            r"^<-" => LARROW,
+            r"^=>" => FAT_ARROW,
 
             // Logical Operators
-            r"^<=" => { LE },
-            r"^>=" => { GE },
-            r"^!=" => { NE },
-            r"^<"  => { LT },
-            r"^>"  => { GT },
-            r"^==" => { EQEQ },
-            r"^="  => { EQ },
-            r"^&&" => { ANDAND },
-            r"^&"  => { AND },
-            r"^\|\|" => { OROR },
-            r"^\|" => { OR },
-            r"^!"  => { NOT },
+            r"^<=" => LE,
+            r"^>=" => GE,
+            r"^!=" => NE,
+            r"^<"  => LT,
+            r"^>"  => GT,
+            r"^==" => EQEQ,
+            r"^="  => EQ,
+            r"^&&" => ANDAND,
+            r"^&"  => AND,
+            r"^\|\|" => OROR,
+            r"^\|" => OR,
+            r"^!"  => NOT,
 
             // Mathematical Operators
-            r"^\+" => { PLUS },
-            r"^-"  => { MINUS },
-            r"^\*" => { STAR },
-            r"^/"  => { SLASH },
-            r"^%"  => { PERCENT },
-            r"^\^" => { CARET },
+            r"^\+" => PLUS,
+            r"^-"  => MINUS,
+            r"^\*" => STAR,
+            r"^/"  => SLASH,
+            r"^%"  => PERCENT,
+            r"^\^" => CARET,
 
             // Structural
-            r"^\." => { DOT },
-            r"^,"  => { COMMA },
-            r"^;"  => { SEMI },
-            r"^:"  => { COLON },
+            r"^\." => DOT,
+            r"^,"  => COMMA,
+            r"^;"  => SEMI,
+            r"^:"  => COLON,
 
             // The interesting ones
             r"^[a-zA-Z_][a-zA-Z0-9_]*" => {
@@ -133,9 +133,9 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
                     _ => IDENT(Atom::from_slice(_v)),
                 }
             },
-            r#"^"([^"]|\\")""# => { LIT_STR(Atom::from_slice(_v)) }, // TODO: Better string parsing
-            r"^[0-9]*\.[0-9]+" => { LIT_FLOAT(FromStr::from_str(_v).unwrap()) },
-            r"^[0-9]+" => { LIT_INTEGER(FromStr::from_str(_v).unwrap()) }
+            r#"^"([^"]|\\")""# => LIT_STR(Atom::from_slice(_v)), // TODO: Better string parsing
+            r"^[0-9]*\.[0-9]+" => LIT_FLOAT(FromStr::from_str(_v).unwrap()),
+            r"^[0-9]+" => LIT_INTEGER(FromStr::from_str(_v).unwrap())
         }) {
             toks.push(tok);
         } else {
