@@ -21,8 +21,8 @@ impl Atom {
     pub fn from_slice(string: &str) -> Atom {
         let mut hash_map = HASHMAP.lock().unwrap();
 
-        if let Some(x) = hash_map.get(string) {
-            return Atom { string: x.clone() };
+        if let Some(arc) = hash_map.get(string) {
+            return Atom { string: arc.clone() };
         }
 
         // TODO: Check to see if these olympics are necessary

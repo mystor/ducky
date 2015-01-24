@@ -1,7 +1,46 @@
 #![allow(dead_code)]
 use intern::Atom;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{HashMap, HashSet, BTreeMap};
 use il::*;
+
+struct SpecContext {
+    foo: i32
+}
+impl SpecContext {
+    fn get_valimpl(&mut self) -> ValImpl {
+        unimplemented!();
+    }
+    fn get_method(&mut self, method: &Prop) -> MethodImpl {
+        unimplemented!();
+    }
+}
+
+
+/// Its a value in our language! Aren't you excited!
+#[derive(Clone)]
+enum ValImpl {
+    /// A struct representing a record, very handy!
+    Rec(RecordImpl),
+    /// A discriminated union, they are distinguished by arbitrary identifiers!
+    /// its great! It will be implemented by some sort of structure with an int,
+    /// and a union of pointers or some shit. Maybe we'll put the other values inline
+    /// or something like that, but there will definitely be a ton of pointer stuff
+    Union(HashSet<ValImpl>),
+    /// An integer (woah, we have real numbers in this language!)
+    Int,
+    /// A floating point number (crazy, we have numbers which aren't ints!)
+    Float,
+    /// Strings, woo! (not interned :( )
+    String,
+    /// Bool! Yeah! Booyeah! Boom! Headshot!
+    Bool,
+}
+
+impl ValImpl {
+    fn call_method(name: Symbol, args: Vec<ExprImpl>) -> MethodSpec {
+        unimplemented!()
+    }
+}
 
 /// A MethodImpl represents the implementation of a method. Each MethodImpl
 /// has at most one associated RecordImpl which the MethodImpl is implemented on.
@@ -21,27 +60,7 @@ struct MethodImpl {
     specializations: HashMap<Vec<ValImpl>, MethodSpec>
 }
 
-/// Its a value in our language! Aren't you excited!
-#[derive(Clone)]
-enum ValImpl {
-    /// A struct representing a record, very handy!
-    Rec(RecordImpl),
-    /// A discriminated union, they are distinguished by arbitrary identifiers!
-    /// its great! It will be implemented by some sort of structure with an int,
-    /// and a union of pointers or some shit. Maybe we'll put the other values inline
-    /// or something like that, but there will definitely be a ton of pointer stuff
-    Union(Vec<ValImpl>),
-    /// An integer (woah, we have real numbers in this language!)
-    Int,
-    /// A floating point number (crazy, we have numbers which aren't ints!)
-    Float,
-    /// Strings, woo! (not interned :( )
-    String,
-    /// Bool! Yeah! Booyeah! Boom! Headshot!
-    Bool,
-}
-
-impl ValImpl {
+impl MethodImpl {
 }
 
 /// A RecordImpl represents an implementation of a record in memory.
