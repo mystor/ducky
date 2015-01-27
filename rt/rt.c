@@ -1,12 +1,15 @@
-#include <limits.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <gc.h>
+#include <limits.h> // MAX values
+#include <stdlib.h> // Sized Types
+#include <stdio.h>  // IO
+#include <assert.h> // Assertions
+#include <string.h> // memcpy
+#include <gc.h>     // Garbage Collection
 
-
-// The storage system for values is copied from the SpiderMonkey compiler.
+// The storage system for values is copied from the SpiderMonkey jit.
 // Values are 64-bits, and consist of a 17-bit tag, and 47 bits of value.
+//
+// TODO(michael): Make this work on non-little-endian systems,
+// and systems which have non-64bit pointers
 
 typedef enum { // uint8_t
   TYPE_DOUBLE = 0x00,
@@ -15,7 +18,7 @@ typedef enum { // uint8_t
   TYPE_RECORD = 0x03
 } __attribute__((packed)) ValueType;
 
-_Static_assert(sizeof(ValueType) == 1, "");
+_Static_assert(sizeof(ValueType) == sizeof(uint8_t), "Types are 8 bits wide");
 
 typedef enum {
   TAG_MAX_DOUBLE = 0x1FFF0, // First 13 bits set
@@ -25,46 +28,45 @@ typedef enum {
 } __attribute__((packed)) ValueTag;
 
 // Tags should fit in 4 bytes
-_Static_assert(sizeof(ValueTag) == 4, "");
+_Static_assert(sizeof(ValueTag) == sizeof(uint32_t), "Tags are 32 bits wide");
 
 #define TAG_SHIFT 47
+#define TAG_MASK ((uint64_t) UINT_MAX << TAG_SHIFT)
 typedef enum {
-  SHIFTED_TAG_MAX_DOUBLE = (((uint64_t) TAG_MAX_DOUBLE) << TAG_SHIFT) | 0xffffffff,
+  SHIFTED_TAG_MAX_DOUBLE = (((uint64_t) TAG_MAX_DOUBLE) << TAG_SHIFT) | 0xffffffff, // TODO(michael): Investigate
   SHIFTED_TAG_BOOLEAN = ((uint64_t) TAG_BOOLEAN) << TAG_SHIFT,
   SHIFTED_TAG_STRING = ((uint64_t) TAG_STRING) << TAG_SHIFT,
   SHIFTED_TAG_RECORD = ((uint64_t) TAG_RECORD) << TAG_SHIFT
 } __attribute((packed)) ShiftedValueTag;
 
-_Static_assert(sizeof(ShiftedValueTag) == 8, "");
+_Static_assert(sizeof(ShiftedValueTag) == sizeof(uint64_t), "Shifted tags are 64-bits wide");
 
-
-
-
-typedef union jsval_layout
+// The actual union which holds the value
+typedef union
 {
   uint64_t asBits;
 #if !defined(_WIN64)
   /* MSVC does not pack these correctly :-( */
   struct {
     uint64_t payload47 : 47;
-    JSValueTag tag : 17;
+    ValueTag tag : 17;
   } debugView;
 #endif
   struct {
     union {
       int32_t i32;
       uint32_t u32;
-      // JSWhyMagic why;
     } payload;
   } s;
   double asDouble;
-  void *asPtr;
+  struct record *asPtr;
   size_t asWord;
   uintptr_t asUIntPtr;
-} __attribute__((aligned (8))) jsval_layout;
+} __attribute__((aligned (8))) value;
+
+_Static_assert(sizeof(value) == sizeof(uint64_t), "Values are 64-bits wide");
 
 typedef int32_t symbol;
-// typedef void *value;
 
 // a record_field should be 64-bits wide
 // and tightly packed (ideally)
@@ -73,43 +75,28 @@ struct record_field {
   int32_t offset; // in sizeof(size_t) units
 };
 
-// A record_def is a constant linear-probed hash table
-struct record_def {
-  int32_t size; // In sizeof(record_field) units
-  // Offsets...
+// TODO(michael): See if these can be made a PO2 size
+union record_def {
+  struct {
+    symbol symbol;
+    uint64_t offset;
+  } prop;
+  struct {
+    symbol symbol;
+    void *fn;
+  } mthd;
+  struct {
+    uint32_t prop_size;
+    uint32_t mthd_size;
+  } header;
 };
 
 struct record {
-  struct record_def *def;
+  union record_def *def;
   // fields...
 };
-// TODO(michael): Make this work on non-little-endian systems,
-// and systems which have non-64bit pointers
 
-enum tags {
-  RECORD_TAG = 0x0,
-  INT_TAG = 0x1, // TODO(michael): Unused right now
-  BOOL_TAG = 0x2,
-  STR_TAG = 0x4
-};
-#define TAG_MASK 0x7
-
-typedef uint64_t ducky_bool;
 typedef uint32_t bool;
-
-typedef union value {
-  uint64_t bytes;
-  struct {
-    // Filler fields (so that double_tag lines up with the high 16 bits of the double)
-    uint16_t _b;
-    uint32_t _a;
-    uint16_t double_tag;
-  } __attribute__((packed));
-  ducky_bool asBool;
-  double asDouble;
-  struct record *asRecord;
-
-} __attribute__((aligned (8))) value;
 
 #define TRUE 0xffff 0000 0000 0003
 #define FALSE 0xffff 0000 0000 0002
@@ -117,7 +104,8 @@ typedef union value {
 _Static_assert(sizeof(value) == 8, "Values must be 64-bits");
 
 inline bool valueIsDouble(value v) {
-  return v.double_tag != USHRT_MAX;
+  return v.asBits <= SHIFTED_TAG_MAX_DOUBLE;
+  // return v.double_tag != USHRT_MAX;
 }
 
 inline double valueAsDouble(value v) {
@@ -125,23 +113,87 @@ inline double valueAsDouble(value v) {
 }
 
 inline bool valueIsRecord(value v) {
-  return !valueIsDouble(v) && (v.bytes & TAG_MASK) == RECORD_TAG;
+  return (v.asBits & TAG_MASK) == SHIFTED_TAG_RECORD;
 }
 
 inline struct record *valueAsRecord(value v) {
-
+  return (struct record *)(v.asWord & (~TAG_MASK));
 }
 
 inline bool valueIsBool(value v) {
-  return !valueIsDouble(v) && (v.bytes & TAG_MASK) == BOOL_TAG;
+  return (v.asBits & TAG_MASK) == SHIFTED_TAG_BOOLEAN;
 }
 
+inline bool valueAsBool(value v) {
+  return v.s.payload.u32; // Tag mask doesn't cover this part of the value
+}
 
-
-value get_property(value v, symbol s) {
+inline value getProperty(value v, symbol s) {
   assert(valueIsRecord(v));
+  struct record *record = valueAsRecord(v);
+  union record_def *def = record->def;
 
+  uint32_t size = def->header.prop_size; // TODO: Eww, double pointers :s
+  uint32_t idx = s % size;
+  def++;
 
+  while ((def+idx)->prop.symbol != s) {
+    idx = (idx + 1) % size;
+
+    // Theoretically, the property should always exist. This assert catches
+    // the case when it doesn't exist for debugging purposes.
+    assert(idx != s % size);
+  }
+
+  return ((value *)(record+1))[(def+idx)->prop.offset];
+}
+
+void *getClosure(value v) {
+  assert(valueIsRecord(v));
+  struct record *record = valueAsRecord(v);
+  assert(record->def->header.mthd_size);
+
+  return record+1;
+}
+
+inline void *getMethod(value v, symbol s) {
+  assert(valueIsRecord(v));
+  struct record *record = valueAsRecord(v);
+  union record_def *def = record->def;
+
+  uint32_t size = def->header.mthd_size; // TODO: Eww, double pointers :s
+  uint32_t idx = s % size;
+
+  // Move past the properties & header
+  def += def->header.prop_size + 1;
+
+  while ((def+idx)->mthd.symbol != s) {
+    idx = (idx + 1) % size;
+
+    // Theoretically, the property should always exist. This assert catches
+    // the case when it doesn't exist for debugging purposes.
+    assert(idx != s % size);
+  }
+
+  return (def+idx)->mthd.fn;
+}
+
+inline value allocRecord(union record_def *def, value *props) {
+  value v;
+
+  uint32_t prop_count = def->header.prop_size;
+  v.asPtr = GC_MALLOC(sizeof(struct record) + (prop_count * sizeof(value)));
+
+  // TODO(michael): Gracefully handle failed allocations
+  assert(v.asPtr != 0);
+
+  v.asPtr->def = def;
+  memcpy(v.asPtr+1, props, prop_count * sizeof(value));
+
+  // Tag the value
+  v.asBits &= SHIFTED_TAG_RECORD;
+
+  return v;
 }
 
 
@@ -159,149 +211,3 @@ int main() {
   struct record *rec2 = GC_MALLOC(sizeof(struct record) + (5 * sizeof(value)));
   printf("%p\n", rec2);
 }
-
-
-
-
-
-
-
-
-
-/*
-  2 types
-  (a, b, ...) -> c
-  { a: b, ... }
- */
-
-/*
-
-// NOTE: Right now, ducky doesn't have a module system and can't really handle
-// linking with other things. This runtime file will be used for implementing
-// important mechanics stuff
-// Changes may need to be made, as lots of these functions should probably
-// be inlined into the code
-
-typedef struct string_struct {
-  // @TODO: Strings should probably have lazily computed hash
-  unsigned int length;
-  char *chars;
-} *string;
-
-typedef unsigned int istring;
-istring next_istring = 0;
-unsigned int intern_capacity = 0;
-string *interned_strings; // @TODO: Capacity!
-
-typedef struct map_struct {
-  unsigned int length;
-  istring *names;
-} *map;
-
-int _string_eq(string a, string b) {
-  if (a->length != b->length) return 0;
-
-  unsigned int i, length = a->length;
-  char *ap = a->chars, *bp = b->chars;
-  for (i = 0; i < length; i++)
-    if (*ap++ != *bp++) return 0;
-
-  return 1;
-}
-
-istring _get_istring(string str) {
-  unsigned int i;
-  for (i = 0; i < next_istring; i++) {
-    if (_string_eq(interned_strings[i], str))
-      return i;
-  }
-
-  if (next_istring >= intern_capacity) {
-    intern_capacity *= 2;
-    interned_strings = realloc(interned_strings, intern_capacity * 2);
-
-    if (interned_strings == 0) // FUUU
-      exit(100); // SHITTTT
-  }
-
-  interned_strings[next_istring] = str;
-  return next_istring++;
-}
-
-// A value is a block of memory, containing only pointers
-// The first value in the block of memory is a pointer to the
-// _map which describes the type in the block of memory.
-// After that memory, the data stored varies depending on the type of value
-//
-// If the type is a function (lowest bit is 1), then *value is two words wide,
-// and contains a function pointer in the second word.
-//
-// If the type is a record (lowest bit is 0), then *value is a list of properties
-// of the object. The map object contains a list of interned strings, corresponding
-// to the names of each of the properties on the object.
-//
-// If the type is a double, the *value is two words wide, and the second word contains
-// the IEEE double percision floating point number
-typedef void **val;
-
-typedef struct list_struct {
-  unsigned int count;
-  unsigned int capacity;
-  val *items;
-} *list;
-
-enum value_kind {
-  ptr = 0,
-  smi = 1,
-  str = 2,
-  lst = 3,
-  bool = 4
-};
-
-int main() {
-  val a = (void*) ((10 << 3) + 1);
-  val b = (void*) ((20 << 3) + 1);
-
-  val c;
-  * let c = a + b *
-  switch ((int) a & 7) {
-  case smi:
-    // I'm assuming that b must also be a smi... probably can't do that, can I
-    c = (void*) (((int) a + (int) b) ^ 3);
-    break;
-  case str:
-    // TODO: Implement a + b for strings
-    return 101;
-  case lst:
-    // TODO: Implement
-    return 101;
-  case ptr:
-    {
-      map tymap = (map) (a[0]);
-
-      istring prop = 0; // Inlined istring for +!
-
-      // Get the index to look into
-      // TODO: This could fail...
-      unsigned int offset;
-      for (offset = 0; offset < tymap->length; offset++) {
-        if ((tymap->names)[offset] == prop)
-          break;
-      }
-
-      // Get the property, and cast it to an array of function pointers
-      void *(**clos) (void *, void *, void *) = a[offset];
-
-      // The second element is where the function is stored, let's call it!
-      c = clos[1](clos, // The closure
-                  a,    // implicit self argument
-                  b);   // Actual arguments
-    }
-    break;
-  }
-
-  printf("%lld\n", (long long int) c >> 3);
-
-  return 0;
-}
-*/
