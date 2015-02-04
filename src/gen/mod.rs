@@ -3,6 +3,9 @@ use std::collections::{HashMap, RingBuf};
 use rusty_llvm as llvm;
 use il::*;
 
+#[cfg(test)]
+mod test;
+
 struct SymbolTable {
     symbols: HashMap<Symbol, u64>,
     counter: u64
@@ -261,7 +264,8 @@ struct Method<'a> {
     // record: Record<'a>,
     params: Vec<Ident>,
     body: Expr,
-    implementation: Option<&'a llvm::Value>
+    implementation: Option<&'a llvm::Value>,
+    built: bool
 }
 
 impl<'a> Method<'a> {
@@ -269,7 +273,8 @@ impl<'a> Method<'a> {
         Method{
             params: params,
             body: body,
-            implementation: None
+            implementation: None,
+            built: false
         }
     }
 
@@ -285,6 +290,23 @@ impl<'a> Method<'a> {
         }
 
         self.implementation.unwrap()
+    }
+
+    fn gen(&mut self, ctx: &mut GenContext<'a>) -> &'a llvm::Value {
+        let decl = self.get_function(ctx);
+        if self.built { return decl }
+
+        // Create the basic block for the function!
+        let fn_body = ctx.ctx.append_basic_block(decl, "function_body").unwrap();
+        ctx.builder.position_builder_at_end(fn_body);
+
+        // Generate the function's body
+        let ret_val = gen_expr(&self.body, ctx);
+
+        // Return the resulting value from the function
+        ctx.builder.build_ret(ret_val.to_unk_ll(ctx));
+
+        decl
     }
 }
 
@@ -485,4 +507,41 @@ fn gen_stmt<'a>(stmt: &Stmt, ctx: &mut GenContext<'a>) -> Value<'a> {
         Stmt::Expr(ref expr) => gen_expr(expr, ctx),
         Stmt::Empty => Value::KNull
     }
+}
+
+// TODO(michael): make this actually useful
+pub fn gen_code(ast: Vec<Stmt>) {
+    let ctx = llvm::context_create();
+    let module = llvm::module_create_with_name("module", &*ctx);
+    let builder = ctx.create_builder();
+    let mut method_queue = RingBuf::new();
+    let mut symbol_table = SymbolTable::new();
+
+    let mut gc = GenContext{
+        ctx: &*ctx,
+        builder: &*builder,
+        module: &*module,
+        method_queue: method_queue,
+        symbol_table: symbol_table
+    };
+
+    // TODO(michael): Global variables and more!
+    // (and variables at all)
+
+    // Create the main function!
+    let main_function = module.add_function(
+        "__ducky_main",
+        llvm::Type::function_type(ctx.void_type().unwrap(), &vec![][], false).unwrap()).unwrap();
+
+    let main_function_body = ctx.append_basic_block(main_function, "main_body").unwrap();
+    builder.position_builder_at_end(main_function_body);
+
+    // Create the body for that main function!
+    let random_expr = Expr::Block(ast);
+    // And generate it!
+    gen_expr(&random_expr, &mut gc);
+
+    builder.build_ret_void();
+
+    module.dump_module();
 }
