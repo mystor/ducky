@@ -5,6 +5,7 @@ dependencies = [
  "lazy_static 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex_macros 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rusty_llvm 0.0.1",
 ]
 
 [[package]]
@@ -24,4 +25,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "regex 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "rusty_llvm"
+version = "0.0.1"
 

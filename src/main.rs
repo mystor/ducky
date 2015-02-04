@@ -15,7 +15,9 @@ extern crate lazy_static;
 extern crate log;
 
 // LLVM bindings (from rustc)
-extern crate rustc_llvm;
+// extern crate rustc_llvm;
+
+extern crate rusty_llvm;
 
 pub mod intern;
 pub mod scope;
@@ -83,7 +85,7 @@ let y = id(id);
 let z = id(5);
 "#);
 
-    // let polymorphism!
+    /* // let polymorphism!
     infer_types_for_code(r#"
 let x = 10;
 let res = match x {
@@ -92,7 +94,7 @@ let res = match x {
         1 + 1
     }
 };
-"#);
+"#); */
     // gen::gen();
 
     // unsafe {

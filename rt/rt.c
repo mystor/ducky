@@ -5,139 +5,79 @@
 #include <string.h> // memcpy
 #include <gc.h>     // Garbage Collection
 
-// The storage system for values is copied from the SpiderMonkey jit.
-// Values are 64-bits, and consist of a 17-bit tag, and 47 bits of value.
-//
-// TODO(michael): Make this work on non-little-endian systems,
-// and systems which have non-64bit pointers
-
-typedef enum { // uint8_t
-  TYPE_DOUBLE = 0x00,
-  TYPE_BOOLEAN = 0x01,
-  TYPE_STRING = 0x02,
-  TYPE_RECORD = 0x03
-} __attribute__((packed)) ValueType;
-
-_Static_assert(sizeof(ValueType) == sizeof(uint8_t), "Types are 8 bits wide");
-
-typedef enum {
-  TAG_MAX_DOUBLE = 0x1FFF0, // First 13 bits set
-  TAG_BOOLEAN = TAG_MAX_DOUBLE | TYPE_BOOLEAN,
-  TAG_STRING = TAG_MAX_DOUBLE | TYPE_STRING,
-  TAG_RECORD = TAG_MAX_DOUBLE | TYPE_RECORD
-} __attribute__((packed)) ValueTag;
-
-// Tags should fit in 4 bytes
-_Static_assert(sizeof(ValueTag) == sizeof(uint32_t), "Tags are 32 bits wide");
-
-#define TAG_SHIFT 47
-#define TAG_MASK ((uint64_t) UINT_MAX << TAG_SHIFT)
-typedef enum {
-  SHIFTED_TAG_MAX_DOUBLE = (((uint64_t) TAG_MAX_DOUBLE) << TAG_SHIFT) | 0xffffffff, // TODO(michael): Investigate
-  SHIFTED_TAG_BOOLEAN = ((uint64_t) TAG_BOOLEAN) << TAG_SHIFT,
-  SHIFTED_TAG_STRING = ((uint64_t) TAG_STRING) << TAG_SHIFT,
-  SHIFTED_TAG_RECORD = ((uint64_t) TAG_RECORD) << TAG_SHIFT
-} __attribute((packed)) ShiftedValueTag;
-
-_Static_assert(sizeof(ShiftedValueTag) == sizeof(uint64_t), "Shifted tags are 64-bits wide");
-
-// The actual union which holds the value
-typedef union
-{
-  uint64_t asBits;
-#if !defined(_WIN64)
-  /* MSVC does not pack these correctly :-( */
-  struct {
-    uint64_t payload47 : 47;
-    ValueTag tag : 17;
-  } debugView;
-#endif
-  struct {
-    union {
-      int32_t i32;
-      uint32_t u32;
-    } payload;
-  } s;
-  double asDouble;
-  struct record *asPtr;
-  size_t asWord;
-  uintptr_t asUIntPtr;
-} __attribute__((aligned (8))) value;
-
-_Static_assert(sizeof(value) == sizeof(uint64_t), "Values are 64-bits wide");
-
-typedef int32_t symbol;
-
-// a record_field should be 64-bits wide
-// and tightly packed (ideally)
-struct record_field {
-  symbol symbol;
-  int32_t offset; // in sizeof(size_t) units
-};
-
-// TODO(michael): See if these can be made a PO2 size
-union record_def {
-  struct {
-    symbol symbol;
-    uint64_t offset;
-  } prop;
-  struct {
-    symbol symbol;
-    void *fn;
-  } mthd;
-  struct {
-    uint32_t prop_size;
-    uint32_t mthd_size;
-  } header;
-};
-
-struct record {
-  union record_def *def;
-  // fields...
-};
-
 typedef uint32_t bool;
+typedef uint64_t symbol;
 
-#define TRUE 0xffff 0000 0000 0003
-#define FALSE 0xffff 0000 0000 0002
+typedef struct field_entry {
+  symbol symbol;
+  size_t offset;
+} field_entry;
 
-_Static_assert(sizeof(value) == 8, "Values must be 64-bits");
+typedef struct mthd_entry {
+  symbol symbol;
+  void *fn;
+} mthd_entry;
 
-inline bool valueIsDouble(value v) {
-  return v.asBits <= SHIFTED_TAG_MAX_DOUBLE;
-  // return v.double_tag != USHRT_MAX;
+typedef struct record_def {
+  uint32_t prop_size;
+  uint32_t mthd_size;
+  // entries...
+} record_def;
+
+typedef struct record {
+  record_def *def;
+  // fields...
+} record;
+
+typedef enum value_tag {
+  TAG_RECORD,
+  TAG_DOUBLE,
+  TAG_UINT32,
+  TAG_BOOL,
+  TAG_STRING,
+  TAG_NULL
+} __attribute__((packed)) value_tag;
+
+typedef struct value {
+  value_tag tag; // TODO(michael): Use a technique like NaN-boxing or pointer tagging to make this struct be PO2 sized
+  size_t value;
+} value;
+
+bool valueIsDouble(value v) {
+  return v.tag == TAG_DOUBLE;
 }
 
-inline double valueAsDouble(value v) {
-  return v.asDouble;
+double valueAsDouble(value v) {
+  return (double) v.value;
 }
 
-inline bool valueIsRecord(value v) {
-  return (v.asBits & TAG_MASK) == SHIFTED_TAG_RECORD;
+bool valueIsRecord(value v) {
+  return v.tag == TAG_RECORD;
 }
 
-inline struct record *valueAsRecord(value v) {
-  return (struct record *)(v.asWord & (~TAG_MASK));
+record *valueAsRecord(value v) {
+  return (record *) v.value;
 }
 
-inline bool valueIsBool(value v) {
-  return (v.asBits & TAG_MASK) == SHIFTED_TAG_BOOLEAN;
+bool valueIsBool(value v) {
+  return v.tag == TAG_BOOL;
 }
 
-inline bool valueAsBool(value v) {
-  return v.s.payload.u32; // Tag mask doesn't cover this part of the value
+bool valueAsBool(value v) {
+  return (bool) v.value;
 }
 
-inline value getProperty(value v, symbol s) {
+value getProperty(value v, symbol s) {
   assert(valueIsRecord(v));
-  struct record *record = valueAsRecord(v);
-  union record_def *def = record->def;
+  record *record = valueAsRecord(v);
+  record_def *def = record->def;
 
-  uint32_t size = def->header.prop_size; // TODO: Eww, double pointers :s
+  uint32_t size = def->prop_size;
   uint32_t idx = s % size;
-  def++;
 
-  while ((def+idx)->prop.symbol != s) {
+  field_entry *fields = (field_entry *)(def + 1);
+
+  while (fields[idx].symbol != s) {
     idx = (idx + 1) % size;
 
     // Theoretically, the property should always exist. This assert catches
@@ -145,29 +85,21 @@ inline value getProperty(value v, symbol s) {
     assert(idx != s % size);
   }
 
-  return ((value *)(record+1))[(def+idx)->prop.offset];
+  return ((value *)(record+1))[fields[idx].offset];
 }
 
-void *getClosure(value v) {
+void *getMethod(value v, symbol s) {
   assert(valueIsRecord(v));
-  struct record *record = valueAsRecord(v);
-  assert(record->def->header.mthd_size);
+  record *record = valueAsRecord(v);
+  record_def *def = record->def;
 
-  return record+1;
-}
-
-inline void *getMethod(value v, symbol s) {
-  assert(valueIsRecord(v));
-  struct record *record = valueAsRecord(v);
-  union record_def *def = record->def;
-
-  uint32_t size = def->header.mthd_size; // TODO: Eww, double pointers :s
+  uint32_t size = def->mthd_size; // TODO: Eww, double pointers :s
   uint32_t idx = s % size;
 
   // Move past the properties & header
-  def += def->header.prop_size + 1;
+  mthd_entry *mthds = (mthd_entry *)(((field_entry *)(def + 1)) + def->prop_size);
 
-  while ((def+idx)->mthd.symbol != s) {
+  while (mthds[idx].symbol != s) {
     idx = (idx + 1) % size;
 
     // Theoretically, the property should always exist. This assert catches
@@ -175,39 +107,22 @@ inline void *getMethod(value v, symbol s) {
     assert(idx != s % size);
   }
 
-  return (def+idx)->mthd.fn;
+  return mthds[idx].fn;
 }
 
-inline value allocRecord(union record_def *def, value *props) {
-  value v;
-
-  uint32_t prop_count = def->header.prop_size;
-  v.asPtr = GC_MALLOC(sizeof(struct record) + (prop_count * sizeof(value)));
-
-  // TODO(michael): Gracefully handle failed allocations
-  assert(v.asPtr != 0);
-
-  v.asPtr->def = def;
-  memcpy(v.asPtr+1, props, prop_count * sizeof(value));
-
-  // Tag the value
-  v.asBits &= SHIFTED_TAG_RECORD;
-
+value allocRecord(size_t size) {
+  value v = { .tag = TAG_RECORD };
+  v.value = (size_t) GC_MALLOC(size);
   return v;
-}
+};
 
-
-
+void __ducky__main();
 int main() {
+  // TODO(michael): Store the cmd line arguments somewhere
+
   GC_INIT();
 
-  // Allocate a record with 5 properties
-  struct record *rec = GC_MALLOC(sizeof(struct record) + (5 * sizeof(value)));
-  printf("%p\n", rec);
+  __ducky__main();
 
-  void *randomptr = GC_MALLOC(1);
-  printf("%p\n", randomptr);
-
-  struct record *rec2 = GC_MALLOC(sizeof(struct record) + (5 * sizeof(value)));
-  printf("%p\n", rec2);
+  return 0;
 }
