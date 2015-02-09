@@ -1,5 +1,5 @@
-#![allow(unstable)]
-use std::io::Command;
+#![feature(io)]
+use std::old_io::Command;
 
 fn main() {
     // let out_dir = os::getenv("OUT_DIR").unwrap();

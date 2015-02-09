@@ -2,28 +2,28 @@
 name = "ducky"
 version = "0.0.1"
 dependencies = [
- "lazy_static 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "regex 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "regex_macros 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex_macros 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rusty_llvm 0.0.1",
 ]
 
 [[package]]
 name = "lazy_static"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "regex"
-version = "0.1.10"
+version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "regex_macros"
-version = "0.1.5"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "regex 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

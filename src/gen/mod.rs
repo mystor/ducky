@@ -5,6 +5,7 @@ use il::*;
 
 #[cfg(test)]
 mod test;
+// mod llvm;
 
 struct SymbolTable {
     symbols: HashMap<Symbol, u64>,
@@ -318,6 +319,41 @@ struct GenContext<'a> {
     symbol_table: SymbolTable,
 }
 
+macro_rules! builtin_func {
+    ($rustname:ident, $cname:expr, $return_ty: expr, $($pty: expr),+) => {
+        // The function which will fetch it for you
+        fn $rustname(&self) -> &'a llvm::Value {
+            match self.module.get_named_function($cname) {
+                Some(x) => x,
+                None => {
+                    let func_type = llvm::Type::function_type($return_ty, &vec![$($pty),+][], false).unwrap()
+                    let function = module.add_function($cname, func_type);
+                    assert_eq!(module.get_named_function($cname), function);
+
+                    function.unwrap()
+                }
+            }
+        }
+    }
+}
+
+macro_rules! builtin_mthd {
+    ($rustname:ident, $cname:expr, $($args: ident),+) => {
+        fn $rustname(&self) -> &'a llvm::Value {
+            match self.module.get_named_function($cname) {
+                Some(x) => x,
+                None => {
+                    let func_type = llvm::Type::function_type(self.value_type(), &vec![$($pty),+][], false).unwrap()
+                    let function = module.add_function($cname, func_type);
+                    assert_eq!(module.get_named_function($cname), function);
+
+                    function.unwrap()
+                }
+            }
+        }
+    }
+}
+
 impl <'a> GenContext<'a> {
     fn new() -> GenContext<'a> {
         unimplemented!()
@@ -330,6 +366,23 @@ impl <'a> GenContext<'a> {
                   self.ctx.int64_type().unwrap()][],
             false).unwrap()
     }
+
+    fn record_def_type(&self) -> &'a llvm::Type {
+        self.ctx.struct_type(
+            &vec![self.ctx.int32_type().unwrap(),
+                  self.ctx.int32_type().unwrap()][],
+            false).unwrap()
+    }
+
+    fn record_type(&self) -> &'a llvm::Type {
+        self.ctx.struct_type(
+            &vec![
+                self.record_def_type().pointer_type().unwrap()
+                    ][],
+            false).unwrap();
+    }
+
+    builtin_func!(bi_alloc_record, "allocRecord", self.value_type(), self.ctx.int64_type().unwrap());
 
     fn bi_alloc_record(&self) -> &'a llvm::Value {
         self.module.get_named_function("allocRecord").unwrap()

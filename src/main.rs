@@ -1,6 +1,9 @@
 // TODO: Box syntax :'(
 #![feature(plugin, box_syntax, slicing_syntax)]
-#![allow(unstable)]
+
+// !!!!! TEMPORARY WARNING SILENCERS !!!!!
+// TODO(michael): Show => Debug :(
+#![feature(hash, core, std_misc, old_fmt, collections)]
 
 // We're going to use a lot of regular expressions
 #[plugin]
@@ -18,6 +21,7 @@ extern crate log;
 // extern crate rustc_llvm;
 
 extern crate rusty_llvm;
+// extern crate libc;
 
 pub mod intern;
 pub mod scope;
