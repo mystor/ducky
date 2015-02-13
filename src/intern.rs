@@ -53,13 +53,13 @@ impl <S> hash::Hash<S> for Atom where S: hash::Hasher, S: hash::Writer {
     }
 }
 
-impl fmt::String for Atom {
+impl fmt::Display for Atom {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.as_slice())
     }
 }
 
-impl fmt::Show for Atom {
+impl fmt::Debug for Atom {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Atom({})", self.as_slice())
     }

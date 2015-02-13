@@ -19,7 +19,7 @@ pub trait Env {
     fn as_infervalue(&self) -> InferValue;
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 pub struct Scope {
     data_vars: HashMap<Ident, Ty>,
     type_vars: HashMap<Ident, Ty>,

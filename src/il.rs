@@ -4,7 +4,7 @@ use std::fmt;
 // TODO: Namespace Context
 pub use self::Context::*;
 
-#[derive(Show, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Context {
     Internal(u32),
     BuiltIn,
@@ -35,7 +35,7 @@ impl Ident {
     }
 }
 
-impl fmt::Show for Ident {
+impl fmt::Debug for Ident {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Ident(ref atom, ref context) = *self;
         match *context {
@@ -73,7 +73,7 @@ impl Symbol {
     }
 }
 
-impl fmt::Show for Symbol {
+impl fmt::Debug for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Symbol(ref atom) = *self;
         write!(f, "{}", atom.as_slice())
@@ -95,7 +95,7 @@ impl TyProp {
     }
 }
 
-impl fmt::Show for TyProp {
+impl fmt::Debug for TyProp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             TyProp::Val(ref symbol, ref ty) => {
@@ -150,7 +150,7 @@ impl Ty {
     }
 }
 
-impl fmt::Show for Ty {
+impl fmt::Debug for Ty {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Ty::Ident(ref id) => write!(f, "{:?}", id),
@@ -181,7 +181,7 @@ impl fmt::Show for Ty {
 }
 
 
-#[derive(Show, Clone)]
+#[derive(Debug, Clone)]
 pub enum Literal {
     Str(Atom),
     Int(i64),
@@ -200,13 +200,13 @@ impl Literal {
     }
 }
 
-#[derive(Show, Clone)]
+#[derive(Debug, Clone)]
 pub enum Prop {
     Val(Symbol, Expr),
     Method(Symbol, Vec<Ident>, Expr),
 }
 
-#[derive(Show, Clone)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Literal(Literal),
     Ident(Ident),
@@ -219,7 +219,7 @@ pub enum Expr {
     If(Box<Expr>, Box<Expr>, Box<Option<Expr>>),
 }
 
-#[derive(Show, Clone)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Let(Ident, Expr),
     Expr(Expr),

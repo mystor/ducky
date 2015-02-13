@@ -285,7 +285,7 @@ fn _unify<'a, 'b>(stage: &'a mut Stage<'b>, a: Ty, b: Ty) -> Result<(), String> 
             // yeah
             // woop!
 
-            #[derive(Show)]
+            #[derive(Debug)]
             struct UniOpt<'a> {
                 aopt: Ty,
                 bopt: Ty,
@@ -344,7 +344,7 @@ fn _unify<'a, 'b>(stage: &'a mut Stage<'b>, a: Ty, b: Ty) -> Result<(), String> 
                             // the unification (hopefully?)
 
                             // We need to pair each opt with its uniopt
-                            let mut zipped =
+                            let zipped =
                                 uniopts.iter().filter(|x| x.aopt == *aopt).zip(opts.iter());
                             for (uniopt, opt) in zipped {
                                 // Unify the uniopt's tyvar with the opt's extension,

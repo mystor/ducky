@@ -3,7 +3,7 @@
 
 // !!!!! TEMPORARY WARNING SILENCERS !!!!!
 // TODO(michael): Show => Debug :(
-#![feature(hash, core, std_misc, old_fmt, collections)]
+#![feature(hash, core, std_misc, collections)]
 
 // We're going to use a lot of regular expressions
 #[plugin]
@@ -12,10 +12,6 @@ extern crate regex;
 
 #[macro_use]
 extern crate lazy_static;
-
-// Logging macros
-#[macro_use]
-extern crate log;
 
 // LLVM bindings (from rustc)
 // extern crate rustc_llvm;
@@ -33,94 +29,16 @@ pub mod simplify;
 pub mod gen;
 pub mod specialize;
 
-fn infer_types_for_code(code: &str) {
-    info!("-----------------------");
-    info!("{}", code);
-    info!("-----------------------");
-
-    let tokens = lexer::lex(code);
-    match tokens {
-        Ok(rawtoks) => {
-            let ast = parser::parse_program(&mut parser::State::new(&rawtoks[]));
-            info!("Tokens: {:?}", rawtoks);
-            match ast {
-                Ok(rawast) => {
-                    info!("AST: {:?}", rawast);
-                    let inferred_types = infer::infer_program(rawast);
-                    match inferred_types {
-                        Ok(ref types) => {
-                            info!("Unsimplified: {:?}", inferred_types);
-                            println!("{:?}", simplify::simplify(types));
-                        }
-                        Err(err) => {
-                            println!("Error inferring types: {}", err);
-                        }
-                    }
-                }
-                Err(err) => {
-                    println!("Error parsing: {}", err);
-                }
-            }
-        }
-        Err(err) => {
-            println!("Error lexing: {}", err);
-        }
-    }
-}
-
 #[allow(dead_code)]
 fn main() {
-    // Records!
-    infer_types_for_code(r#"
-let magnitude = fn(pt) {
-  sqrt(pt.x * pt.x + pt.y * pt.y)
-};
+    // Do a quick test with some super simple code
+    let code = r#"
+5+5
+"#;
 
-let z = {x: 10, y: 20};
-
-magnitude(z);
-"#);
-
-    // let polymorphism!
-    infer_types_for_code(r#"
-let id = fn(x) { x };
-
-let y = id(id);
-let z = id(5);
-"#);
-
-    /* // let polymorphism!
-    infer_types_for_code(r#"
-let x = 10;
-let res = match x {
-    { a: Int } as y => 1;
-    Int as z => {
-        1 + 1
-    }
-};
-"#); */
-    // gen::gen();
-
-    // unsafe {
-    //     use rustc_llvm as llvm;
-
-    //     let mut context = gen::GenContext::new();
-    //     context.enter_anon_fn();
-    //     let expr = gen::gen_expr(
-    //         &mut context,
-    //         &il::Expr::Call(
-    //             box il::Expr::Fn(vec![il::Ident::from_slice("hello")],
-    //                              box il::Expr::Literal(il::Literal::Int(5))),
-    //             il::Symbol::from_slice("call"),
-    //             vec![il::Expr::Literal(il::Literal::Int(5))]));
-
-
-    //     if let Ok(expr) = expr {
-    //         llvm::LLVMDumpValue(expr);
-    //     }
-
-    //     context.dump();
-    //     context.pass();
-    //     context.dump();
-    // }
+    let tokens = lexer::lex(code).unwrap();
+    let ast = parser::parse_program(&mut parser::State::new(tokens.as_slice())).unwrap();
+    let scoped_ast = scope::scoped_block(&mut scope::Scope::new(), ast.as_slice()).unwrap();
+    infer::infer_program(scoped_ast.clone()).unwrap();
+    gen::gen_code(scoped_ast);
 }

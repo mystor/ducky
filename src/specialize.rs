@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_variables)]
 use intern::Atom;
 use std::collections::{HashMap, HashSet, BTreeMap};
 use il::*;

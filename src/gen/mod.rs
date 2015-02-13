@@ -61,52 +61,51 @@ enum Value<'a> {
 }
 
 impl <'a> Value<'a> {
+    fn mk_val_struct(ctx: &mut GenContext<'a>,
+                     tag: ValueTag,
+                     data: &'a llvm::Value) -> Value<'a> {
+        let unk = ctx.builder.build_alloca(ctx.value_type(), "unk_value_struct").unwrap();
+
+        ctx.builder.build_store(
+            ctx.ctx.int8_type().unwrap().const_int(tag as u64, false).unwrap(),
+            ctx.builder.build_gep(unk, &[
+                ctx.ctx.int32_type().unwrap().const_int(0, false).unwrap(),
+                ctx.ctx.int32_type().unwrap().const_int(0, false).unwrap()], "value_tag").unwrap());
+
+        ctx.builder.build_store(
+            data,
+            ctx.builder.build_gep(unk, &[
+                ctx.ctx.int32_type().unwrap().const_int(0, false).unwrap(),
+                ctx.ctx.int32_type().unwrap().const_int(1, false).unwrap()], "data").unwrap());
+
+        Value::Unk{ ll: unk }
+    }
+
     fn to_unk(&self, ctx: &mut GenContext<'a>) -> Value<'a> {
+        let i64t = ctx.ctx.int64_type().unwrap();
+
         match *self {
             Value::Unk{ll} => Value::Unk{ll: ll},
             Value::KNum{ll} => {
-                Value::Unk{
-                    ll: ctx.ctx.const_struct(
-                        &vec![ctx.ctx.int8_type().unwrap()
-                              .const_int(ValueTag::DOUBLE as u64, false).unwrap(),
-                              ll][], // TODO(michael): Probably wrong type
-                        false).unwrap()
-                }
+                let ll = ctx.bit_cast(ll, i64t);
+                Value::mk_val_struct(ctx, ValueTag::DOUBLE, ll)
             }
             Value::KString{ll, len:_} => {
-                Value::Unk{
-                    ll: ctx.ctx.const_struct(
-                        &vec![ctx.ctx.int8_type().unwrap()
-                              .const_int(ValueTag::STRING as u64, false).unwrap(),
-                              ll][], // TODO(michael): Probably wrong type...
-                        false).unwrap()
-                }
+                let ll = ctx.bit_cast(ll, i64t);
+                Value::mk_val_struct(ctx, ValueTag::STRING, ll)
             }
             Value::KBool{ll} => {
-                Value::Unk{
-                    ll: ctx.ctx.const_struct(
-                        &vec![ctx.ctx.int8_type().unwrap()
-                              .const_int(ValueTag::BOOL as u64, false).unwrap(),
-                              ll][],
-                        false).unwrap()
-                }
+                let ll = ctx.bit_cast(ll, i64t);
+                Value::mk_val_struct(ctx, ValueTag::BOOL, ll)
             }
             Value::KRec{ll, ..} => {
-                Value::Unk{
-                    ll: ctx.ctx.const_struct(
-                        &vec![ctx.ctx.int8_type().unwrap()
-                              .const_int(ValueTag::RECORD as u64, false).unwrap(),
-                              ll][],
-                        false).unwrap()
-                }
+                let ll = ctx.bit_cast(ll, i64t);
+                Value::mk_val_struct(ctx, ValueTag::RECORD, ll)
             },
             Value::KNull => {
-                Value::Unk{
-                    ll: ctx.ctx.const_struct(
-                        &vec![ctx.ctx.int8_type().unwrap().const_int(ValueTag::NULL as u64, false).unwrap(),
-                              ctx.ctx.int64_type().unwrap().const_int(0, false).unwrap()][],
-                        false).unwrap()
-                }
+                Value::mk_val_struct(ctx, ValueTag::NULL,
+                                     ctx.ctx.int64_type().unwrap()
+                                     .const_int(0, false).unwrap())
             }
         }
     }
@@ -178,7 +177,7 @@ impl <'a> RecDef<'a> {
                 i32t.const_int(self.props.len() as u64, false).unwrap(),
                 i32t.const_int(self.mthds.len() as u64, false).unwrap()];
 
-            let mut props = Vec::with_capacity(2*self.props.len());
+            let mut props = Vec::with_capacity(2 * self.props.len());
             // Initialize to Nones
             for _ in self.props.iter() {
                 props.push(None); props.push(None);
@@ -200,7 +199,7 @@ impl <'a> RecDef<'a> {
                 }
             }
 
-            let mut mthds = Vec::with_capacity(2*self.mthds.len());
+            let mut mthds = Vec::with_capacity(2 * self.mthds.len());
             // Initialize to Nones
             for _ in self.mthds.iter() {
                 mthds.push(None); mthds.push(None);
@@ -320,15 +319,16 @@ struct GenContext<'a> {
 }
 
 macro_rules! builtin_func {
-    ($rustname:ident, $cname:expr, $return_ty: expr, $($pty: expr),+) => {
+    ($rustname:ident, $cname:expr, $slf:ident, $return_ty: expr, $($pty: expr),+) => {
         // The function which will fetch it for you
         fn $rustname(&self) -> &'a llvm::Value {
+            let $slf = self;
             match self.module.get_named_function($cname) {
                 Some(x) => x,
                 None => {
-                    let func_type = llvm::Type::function_type($return_ty, &vec![$($pty),+][], false).unwrap()
-                    let function = module.add_function($cname, func_type);
-                    assert_eq!(module.get_named_function($cname), function);
+                    let func_type = llvm::Type::function_type($return_ty, &vec![$($pty),+][], false).unwrap();
+                    let function = self.module.add_function($cname, func_type);
+                    // assert_eq!(self.module.get_named_function($cname), function);
 
                     function.unwrap()
                 }
@@ -345,7 +345,7 @@ macro_rules! builtin_mthd {
                 None => {
                     let func_type = llvm::Type::function_type(self.value_type(), &vec![$($pty),+][], false).unwrap()
                     let function = module.add_function($cname, func_type);
-                    assert_eq!(module.get_named_function($cname), function);
+                    // assert_eq!(module.get_named_function($cname), function);
 
                     function.unwrap()
                 }
@@ -376,24 +376,38 @@ impl <'a> GenContext<'a> {
 
     fn record_type(&self) -> &'a llvm::Type {
         self.ctx.struct_type(
-            &vec![
-                self.record_def_type().pointer_type().unwrap()
-                    ][],
-            false).unwrap();
+            &vec![self.record_def_type().pointer_type(0).unwrap()][],
+            false).unwrap()
     }
 
-    builtin_func!(bi_alloc_record, "allocRecord", self.value_type(), self.ctx.int64_type().unwrap());
-
-    fn bi_alloc_record(&self) -> &'a llvm::Value {
-        self.module.get_named_function("allocRecord").unwrap()
+    fn symbol_type(&self) -> &'a llvm::Type {
+        self.ctx.int64_type().unwrap()
     }
 
-    fn bi_get_property(&self) -> &'a llvm::Value {
-        self.module.get_named_function("getProperty").unwrap()
-    }
+    builtin_func!(bi_alloc_record, "allocRecord", this,
+                  this.value_type(),
+                  this.ctx.int64_type().unwrap());
 
-    fn bi_get_method(&self) -> &'a llvm::Value {
-        self.module.get_named_function("getMethod").unwrap()
+    builtin_func!(bi_get_property, "getProperty", this,
+                  this.value_type(),
+                  this.value_type(), this.symbol_type());
+
+    builtin_func!(bi_get_method, "getMethod", this,
+                  this.ctx.int8_type().unwrap().pointer_type(0).unwrap(),
+                  this.value_type(), this.symbol_type());
+
+    fn bit_cast(&self, mut value: &'a llvm::Value, ty: &'a llvm::Type) -> &'a llvm::Value {
+        if value.is_constant() {
+            // Bounce it off of an alloca.
+            let alloca = self.builder.build_alloca(value.type_of().unwrap(), "alloca_bounce").unwrap();
+            self.builder.build_store(value, alloca);
+            value = self.builder.build_load(alloca, "alloca_unbounce").unwrap();
+        }
+
+        value.dump_value();
+        self.builder.build_alloca(ty, "").unwrap().dump_value();
+
+        self.builder.build_bit_cast(value, ty, "num_as_bytes").unwrap()
     }
 }
 
@@ -409,12 +423,12 @@ fn gen_expr<'a>(e: &Expr, ctx: &mut GenContext<'a>) -> Value<'a> {
                 }
                 Literal::Int(i) => {
                     Value::KNum{ // TODO(michael): Real Ints maybe?
-                        ll: ctx.ctx.float_type().unwrap().const_real(i as f64).unwrap()
+                        ll: ctx.ctx.double_type().unwrap().const_real(i as f64).unwrap()
                     }
                 }
                 Literal::Float(f) => {
                     Value::KNum{
-                        ll: ctx.ctx.float_type().unwrap().const_real(f).unwrap()
+                        ll: ctx.ctx.double_type().unwrap().const_real(f).unwrap()
                     }
                 }
                 Literal::Bool(b) => {
@@ -505,11 +519,18 @@ fn gen_expr<'a>(e: &Expr, ctx: &mut GenContext<'a>) -> Value<'a> {
 
             let ll = objv.to_unk_ll(ctx);
             let symbol_ll = ctx.symbol_table.lookup(symb.clone());
+            let get_method = ctx.bi_get_method();
+            get_method.dump_value();
+            ll.dump_value();
+            ctx.ctx.int64_type().unwrap().const_int(symbol_ll, false).unwrap().dump_value();
+
+            println!("Here");
             let method_ll = ctx.builder.build_call(
-                ctx.bi_get_method(),
+                get_method,
                 &vec![ll,
                       ctx.ctx.int64_type().unwrap().const_int(symbol_ll, false).unwrap()][],
                 "get_method").unwrap();
+            println!("There");
 
             // Determine the function type we want
             let mut ptypes = Vec::with_capacity(args.len());

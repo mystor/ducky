@@ -17,7 +17,7 @@ pub struct InferValue {
     pub type_vars: HashMap<Ident, Ty>,
 }
 
-impl fmt::Show for InferValue {
+impl fmt::Debug for InferValue {
     fn fmt<'a>(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(write!(f, "{{\n"));
         try!(write!(f, "  data_vars: {{\n"));

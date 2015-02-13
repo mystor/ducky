@@ -15,7 +15,7 @@ macro_rules! nom {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Show)]
+#[derive(Debug)]
 pub enum Token {
     // Operators
     EQ,
@@ -78,7 +78,7 @@ pub fn lex(program: &str) -> Result<Vec<Token>, String> {
     while stream.len() > 0 {
         if let Some((0, len)) = regex!(r"^\s+").find(stream) {
             // Skip all spaces
-            stream = stream.slice_from(len);
+            stream = &stream[len..];
         } else if let Some(tok) = nom!(stream |_v| -> {
             // Brackets, Braces, and Parens
             r"^\{" => LBRACE,
