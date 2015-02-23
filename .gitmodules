@@ -1,0 +1,6 @@
+[submodule "llvm"]
+	path = llvm
+	url = http://llvm.org/git/llvm.git
+[submodule "vendor/rust-bindgen"]
+	path = vendor/rust-bindgen
+	url = git@github.com:crabtw/rust-bindgen.git

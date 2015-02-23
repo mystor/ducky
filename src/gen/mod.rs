@@ -1,11 +1,14 @@
 use std::iter::repeat;
 use std::collections::{HashMap, RingBuf};
-use rusty_llvm as llvm;
 use il::*;
+
+use self::llvm::ffi as ll;
 
 #[cfg(test)]
 mod test;
-// mod llvm;
+
+#[macro_use]
+mod llvm;
 
 struct SymbolTable {
     symbols: HashMap<Symbol, u64>,
@@ -13,11 +16,13 @@ struct SymbolTable {
 }
 
 impl SymbolTable {
-    fn new() -> SymbolTable {
-        SymbolTable {symbols: HashMap::new(), counter: 0}
+    unsafe fn new() -> SymbolTable {
+        SymbolTable {
+            symbols: HashMap::new(), counter: 0
+        }
     }
 
-    fn lookup(&mut self, s: Symbol) -> u64 {
+    unsafe fn lookup(&mut self, s: Symbol) -> u64 {
         match self.symbols.entry(s).get() {
             Ok(v) => *v,
             Err(mut e) => {
@@ -39,50 +44,50 @@ enum ValueTag {
 }
 
 #[derive(Clone)]
-enum Value<'a> {
+enum Value {
     Unk{
-        ll: &'a llvm::Value
+        ll: llvm::Value
     },
     KNum{
-        ll: &'a llvm::Value
+        ll: llvm::Value
     },
     KString{
-        ll: &'a llvm::Value,
+        ll: llvm::Value,
         len: i64
     },
     KBool{
-        ll: &'a llvm::Value
+        ll: llvm::Value
     },
     KRec{
-        ll: &'a llvm::Value,
-        rec: Record<'a>
+        ll: llvm::Value,
+        rec: Record
     },
     KNull
 }
 
-impl <'a> Value<'a> {
-    fn mk_val_struct(ctx: &mut GenContext<'a>,
+impl Value {
+    unsafe fn mk_val_struct(ctx: &mut GenContext,
                      tag: ValueTag,
-                     data: &'a llvm::Value) -> Value<'a> {
-        let unk = ctx.builder.build_alloca(ctx.value_type(), "unk_value_struct").unwrap();
+                     data: llvm::Value) -> Value {
+        let unk = ctx.builder.build_alloca(ctx.value_type(), "unk_value_struct");
 
         ctx.builder.build_store(
-            ctx.ctx.int8_type().unwrap().const_int(tag as u64, false).unwrap(),
+            ctx.ctx.int8_type().const_int(tag as u64, false),
             ctx.builder.build_gep(unk, &[
-                ctx.ctx.int32_type().unwrap().const_int(0, false).unwrap(),
-                ctx.ctx.int32_type().unwrap().const_int(0, false).unwrap()], "value_tag").unwrap());
+                ctx.ctx.int32_type().const_int(0, false),
+                ctx.ctx.int32_type().const_int(0, false)], "value_tag"));
 
         ctx.builder.build_store(
             data,
             ctx.builder.build_gep(unk, &[
-                ctx.ctx.int32_type().unwrap().const_int(0, false).unwrap(),
-                ctx.ctx.int32_type().unwrap().const_int(1, false).unwrap()], "data").unwrap());
+                ctx.ctx.int32_type().const_int(0, false),
+                ctx.ctx.int32_type().const_int(1, false)], "data"));
 
         Value::Unk{ ll: unk }
     }
 
-    fn to_unk(&self, ctx: &mut GenContext<'a>) -> Value<'a> {
-        let i64t = ctx.ctx.int64_type().unwrap();
+    unsafe fn to_unk(&self, ctx: &mut GenContext) -> Value {
+        let i64t = ctx.ctx.int64_type();
 
         match *self {
             Value::Unk{ll} => Value::Unk{ll: ll},
@@ -103,14 +108,13 @@ impl <'a> Value<'a> {
                 Value::mk_val_struct(ctx, ValueTag::RECORD, ll)
             },
             Value::KNull => {
-                Value::mk_val_struct(ctx, ValueTag::NULL,
-                                     ctx.ctx.int64_type().unwrap()
-                                     .const_int(0, false).unwrap())
+                let zero = ctx.ctx.int64_type().const_int(0, false);
+                Value::mk_val_struct(ctx, ValueTag::NULL, zero)
             }
         }
     }
 
-    fn to_unk_ll(&self, ctx: &mut GenContext<'a>) -> &'a llvm::Value {
+    unsafe fn to_unk_ll(&self, ctx: &mut GenContext) -> llvm::Value {
         if let Value::Unk{ll} = self.to_unk(ctx) {
             ll
         } else {
@@ -119,14 +123,14 @@ impl <'a> Value<'a> {
     }
 }
 
-struct RecDef<'a> {
+struct RecDef {
     props: HashMap<Symbol, u64>,
-    mthds: HashMap<Symbol, &'a llvm::Value>,
-    cache: Option<&'a llvm::Value>,
+    mthds: HashMap<Symbol, llvm::Value>,
+    cache: Option<llvm::Value>,
 }
 
-impl <'a> RecDef<'a> {
-    fn new(rec: &mut Record<'a>, ctx: &mut GenContext<'a>) -> RecDef<'a> {
+impl RecDef {
+    unsafe fn new(rec: &mut Record, ctx: &mut GenContext) -> RecDef {
         let mut rd = RecDef {
             props: HashMap::new(),
             mthds: HashMap::new(),
@@ -148,7 +152,7 @@ impl <'a> RecDef<'a> {
         rd
     }
     //| The memory footprint of the record definition
-    fn size(&self) -> u64 {
+    unsafe fn size(&self) -> u64 {
         const HEADER_SIZE: u64 = 8;
         const PROP_SIZE: u64 = 12;
         const METHOD_SIZE: u64 = 12;
@@ -158,24 +162,24 @@ impl <'a> RecDef<'a> {
         HEADER_SIZE + props_size + mthds_size
     }
 
-    fn add_prop(&mut self, symb: Symbol, offset: u64) {
+    unsafe fn add_prop(&mut self, symb: Symbol, offset: u64) {
         self.props.insert(symb, offset);
     }
 
-    fn add_mthd(&mut self, symb: Symbol, func: &'a llvm::Value) {
+    unsafe fn add_mthd(&mut self, symb: Symbol, func: llvm::Value) {
         self.mthds.insert(symb, func);
     }
 
-    fn gen(&mut self, ctx: &mut GenContext<'a>) -> &'a llvm::Value {
-        if let Some(v) = self.cache {
+    unsafe fn gen(&mut self, ctx: &mut GenContext) -> llvm::Value {
+         if let Some(v) = self.cache {
             v
         } else {
-            let i32t = ctx.ctx.int32_type().unwrap();
-            let i64t = ctx.ctx.int64_type().unwrap();
+            let i32t = ctx.ctx.int32_type();
+            let i64t = ctx.ctx.int64_type();
 
             let mut vals = vec![
-                i32t.const_int(self.props.len() as u64, false).unwrap(),
-                i32t.const_int(self.mthds.len() as u64, false).unwrap()];
+                i32t.const_int(self.props.len() as u64, false),
+                i32t.const_int(self.mthds.len() as u64, false)];
 
             let mut props = Vec::with_capacity(2 * self.props.len());
             // Initialize to Nones
@@ -187,8 +191,8 @@ impl <'a> RecDef<'a> {
                 let mut i = (sti as usize) % self.props.len();
                 loop {
                     if props[2*i].is_none() {
-                        props[2*i] = Some(i32t.const_int(sti, false).unwrap());
-                        props[2*i+1] = Some(i64t.const_int(*offset, false).unwrap());
+                        props[2*i] = Some(i32t.const_int(sti, false));
+                        props[2*i+1] = Some(i64t.const_int(*offset, false));
                         break;
                     } else {
                         i = (i+1) % self.props.len();
@@ -209,7 +213,7 @@ impl <'a> RecDef<'a> {
                 let mut i = (sti as usize) % self.mthds.len();
                 loop {
                     if mthds[2*i].is_none() {
-                        mthds[2*i] = Some(i32t.const_int(sti, false).unwrap());
+                        mthds[2*i] = Some(i32t.const_int(sti, false));
                         mthds[2*i+1] = Some(*func);
                         break;
                     } else {
@@ -226,50 +230,50 @@ impl <'a> RecDef<'a> {
 
             let vals: Vec<_> = vals.iter().cloned().chain(props).chain(mthds).collect();
 
-            let cs = ctx.ctx.const_struct(&vals[], true).unwrap();
-            self.cache = ctx.module.add_global(cs.type_of().unwrap(), "recorddef");
-            let globl = self.cache.unwrap();
+            let cs = ctx.ctx.const_struct(&vals[], true);
+            let globl = ctx.module.add_global(cs.type_of(), "recorddef");
+            self.cache = Some(globl);
 
             globl.set_initializer(cs);
-            globl
-        }
+             globl
+         }
     }
 }
 
 #[derive(Clone)]
-struct Record<'a> {
-    props: HashMap<Symbol, Value<'a>>,
-    mthds: HashMap<Symbol, Method<'a>>,
+struct Record {
+    props: HashMap<Symbol, Value>,
+    mthds: HashMap<Symbol, Method>,
 }
 
-impl <'a> Record<'a> {
-    fn new() -> Record<'a> {
+impl  Record {
+    unsafe fn new() -> Record {
         Record{
             props: HashMap::new(),
             mthds: HashMap::new()
         }
     }
 
-    fn add_prop(&mut self, s: Symbol, v: Value<'a>) {
+    unsafe fn add_prop(&mut self, s: Symbol, v: Value) {
         self.props.insert(s, v);
     }
 
-    fn add_mthd(&mut self, s: Symbol, v: Method<'a>) {
+    unsafe fn add_mthd(&mut self, s: Symbol, v: Method) {
         self.mthds.insert(s, v);
     }
 }
 
 #[derive(Clone)]
-struct Method<'a> {
-    // record: Record<'a>,
+struct Method {
+    // record: Record,
     params: Vec<Ident>,
     body: Expr,
-    implementation: Option<&'a llvm::Value>,
+    implementation: Option<llvm::Value>,
     built: bool
 }
 
-impl<'a> Method<'a> {
-    fn new(params: Vec<Ident>, body: Expr) -> Method<'a> {
+impl Method {
+    unsafe fn new(params: Vec<Ident>, body: Expr) -> Method {
         Method{
             params: params,
             body: body,
@@ -278,26 +282,26 @@ impl<'a> Method<'a> {
         }
     }
 
-    fn get_function(&mut self, ctx: &mut GenContext<'a>) -> &'a llvm::Value {
+    unsafe fn get_function(&mut self, ctx: &mut GenContext) -> llvm::Value {
         let param_tys: Vec<_> = repeat(ctx.value_type()).take(self.params.len()).collect();
 
         if self.implementation.is_none() {
-            self.implementation = ctx.module.add_function(
+            self.implementation = Some(ctx.module.add_function(
                 "generic_function_name",
-                llvm::Type::function_type(ctx.value_type(),
+                llvm::function_type(ctx.value_type(),
                                           &param_tys[],
-                                          false).unwrap());
+                                          false)));
         }
 
         self.implementation.unwrap()
     }
 
-    fn gen(&mut self, ctx: &mut GenContext<'a>) -> &'a llvm::Value {
+    unsafe fn gen(&mut self, ctx: &mut GenContext) -> llvm::Value {
         let decl = self.get_function(ctx);
         if self.built { return decl }
 
         // Create the basic block for the function!
-        let fn_body = ctx.ctx.append_basic_block(decl, "function_body").unwrap();
+        let fn_body = ctx.ctx.append_basic_block(decl, "function_body");
         ctx.builder.position_builder_at_end(fn_body);
 
         // Generate the function's body
@@ -310,27 +314,27 @@ impl<'a> Method<'a> {
     }
 }
 
-struct GenContext<'a> {
-    ctx: &'a llvm::Context,
-    builder: &'a llvm::Builder,
-    module: &'a llvm::Module,
-    method_queue: RingBuf<Method<'a>>,
+struct GenContext {
+    ctx: llvm::Context,
+    builder: llvm::Builder,
+    module: llvm::Module,
+    method_queue: RingBuf<Method>,
     symbol_table: SymbolTable,
 }
 
 macro_rules! builtin_func {
     ($rustname:ident, $cname:expr, $slf:ident, $return_ty: expr, $($pty: expr),+) => {
         // The function which will fetch it for you
-        fn $rustname(&self) -> &'a llvm::Value {
+        unsafe fn $rustname(&self) -> llvm::Value {
             let $slf = self;
             match self.module.get_named_function($cname) {
                 Some(x) => x,
                 None => {
-                    let func_type = llvm::Type::function_type($return_ty, &vec![$($pty),+][], false).unwrap();
+                    let func_type = llvm::function_type($return_ty, &vec![$($pty),+][], false);
                     let function = self.module.add_function($cname, func_type);
                     // assert_eq!(self.module.get_named_function($cname), function);
 
-                    function.unwrap()
+                    function
                 }
             }
         }
@@ -339,101 +343,94 @@ macro_rules! builtin_func {
 
 macro_rules! builtin_mthd {
     ($rustname:ident, $cname:expr, $($args: ident),+) => {
-        fn $rustname(&self) -> &'a llvm::Value {
+        unsafe fn $rustname(&self) -> llvm::Value {
             match self.module.get_named_function($cname) {
                 Some(x) => x,
                 None => {
-                    let func_type = llvm::Type::function_type(self.value_type(), &vec![$($pty),+][], false).unwrap()
+                    let func_type = llvm::function_type(self.value_type(), &vec![$($pty),+][], false)
                     let function = module.add_function($cname, func_type);
                     // assert_eq!(module.get_named_function($cname), function);
 
-                    function.unwrap()
+                    function
                 }
             }
         }
     }
 }
 
-impl <'a> GenContext<'a> {
-    fn new() -> GenContext<'a> {
+impl  GenContext {
+    unsafe fn new() -> GenContext {
         unimplemented!()
     }
 
-    fn value_type(&self) -> &'a llvm::Type {
+    unsafe fn value_type(&self) -> llvm::Type {
         self.ctx.struct_type(
             // TODO(michael): Non-64-bit computers
-            &vec![self.ctx.int8_type().unwrap(),
-                  self.ctx.int64_type().unwrap()][],
-            false).unwrap()
+            &vec![self.ctx.int8_type(),
+                  self.ctx.int64_type()][],
+            false)
     }
 
-    fn record_def_type(&self) -> &'a llvm::Type {
+    unsafe fn record_def_type(&self) -> llvm::Type {
         self.ctx.struct_type(
-            &vec![self.ctx.int32_type().unwrap(),
-                  self.ctx.int32_type().unwrap()][],
-            false).unwrap()
+            &vec![self.ctx.int32_type(),
+                  self.ctx.int32_type()][],
+            false)
     }
 
-    fn record_type(&self) -> &'a llvm::Type {
+    unsafe fn record_type(&self) -> llvm::Type {
         self.ctx.struct_type(
-            &vec![self.record_def_type().pointer_type(0).unwrap()][],
-            false).unwrap()
+            &vec![self.record_def_type().pointer()][],
+            false)
     }
 
-    fn symbol_type(&self) -> &'a llvm::Type {
-        self.ctx.int64_type().unwrap()
+    unsafe fn symbol_type(&self) -> llvm::Type {
+        self.ctx.int64_type()
     }
 
     builtin_func!(bi_alloc_record, "allocRecord", this,
                   this.value_type(),
-                  this.ctx.int64_type().unwrap());
+                  this.ctx.int64_type());
 
     builtin_func!(bi_get_property, "getProperty", this,
                   this.value_type(),
                   this.value_type(), this.symbol_type());
 
     builtin_func!(bi_get_method, "getMethod", this,
-                  this.ctx.int8_type().unwrap().pointer_type(0).unwrap(),
+                  this.ctx.int8_type().pointer(),
                   this.value_type(), this.symbol_type());
 
-    fn bit_cast(&self, mut value: &'a llvm::Value, ty: &'a llvm::Type) -> &'a llvm::Value {
-        if value.is_constant() {
-            // Bounce it off of an alloca.
-            let alloca = self.builder.build_alloca(value.type_of().unwrap(), "alloca_bounce").unwrap();
-            self.builder.build_store(value, alloca);
-            value = self.builder.build_load(alloca, "alloca_unbounce").unwrap();
-        }
+    unsafe fn bit_cast(&self, mut value: llvm::Value, ty: llvm::Type) -> llvm::Value {
+        value.dump();
+        ty.dump();
 
-        value.dump_value();
-        self.builder.build_alloca(ty, "").unwrap().dump_value();
-
-        self.builder.build_bit_cast(value, ty, "num_as_bytes").unwrap()
+        self.builder.build_bit_cast(value, ty, "num_as_bytes")
     }
 }
 
-fn gen_expr<'a>(e: &Expr, ctx: &mut GenContext<'a>) -> Value<'a> {
+unsafe fn gen_expr(e: &Expr, ctx: &mut GenContext) -> Value {
     match *e {
         Expr::Literal(ref lit) => {
             match *lit {
                 Literal::Str(ref atom) => {
                     Value::KString{
-                        ll: ctx.builder.build_global_string(atom.as_slice(), "_string_").unwrap(),
+                        ll: ctx.builder.build_global_string(atom.as_slice(), "_string_"),
                         len: atom.as_slice().len() as i64
                     }
                 }
                 Literal::Int(i) => {
                     Value::KNum{ // TODO(michael): Real Ints maybe?
-                        ll: ctx.ctx.double_type().unwrap().const_real(i as f64).unwrap()
+                        ll: ctx.ctx.double_type().const_real(i as f64)
                     }
                 }
                 Literal::Float(f) => {
                     Value::KNum{
-                        ll: ctx.ctx.double_type().unwrap().const_real(f).unwrap()
+                        ll: ctx.ctx.double_type().const_real(f)
                     }
                 }
                 Literal::Bool(b) => {
                     Value::KBool{
-                        ll: ctx.ctx.int1_type().unwrap().const_int(b as u64, false).unwrap()
+                        ll: ctx.ctx.int1_type().const_int(b as u64, false)
                     }
                 }
             }
@@ -466,33 +463,33 @@ fn gen_expr<'a>(e: &Expr, ctx: &mut GenContext<'a>) -> Value<'a> {
             // Allocate the record
             let alloced_rec = ctx.builder.build_call(
                 ctx.bi_alloc_record(),
-                &vec![ctx.ctx.int64_type().unwrap().const_int(rec_def.size(), false).unwrap()][],
-                "record").unwrap();
+                &vec![ctx.ctx.int64_type().const_int(rec_def.size(), false)][],
+                "record");
 
-            let zero = ctx.ctx.int64_type().unwrap().const_int(0, false).unwrap();
+            let zero = ctx.ctx.int64_type().const_int(0, false);
             // Set the properties!
             ctx.builder.build_store(
                 rec_def.gen(ctx), // Pointer to the record definition
                 ctx.builder.build_in_bounds_gep(
                     alloced_rec,
                     &vec![zero, zero][],
-                    "record_def_ptr").unwrap());
+                    "record_def_ptr"));
 
             let values_ptr = ctx.builder.build_bit_cast(
                 ctx.builder.build_in_bounds_gep(
                     alloced_rec,
-                    &vec![ctx.ctx.int64_type().unwrap().const_int(1, false).unwrap()][],
-                    "values_ptr_uncast").unwrap(),
-                ctx.value_type().pointer_type(0).unwrap(),
-                "values_ptr").unwrap();
+                    &vec![ctx.ctx.int64_type().const_int(1, false)][],
+                    "values_ptr_uncast"),
+                ctx.value_type().pointer(),
+                "values_ptr");
 
             for (symb, idx) in rec_def.props.iter() {
                 ctx.builder.build_store(
                     rec.props[symb.clone()].to_unk_ll(ctx),
                     ctx.builder.build_in_bounds_gep(
                         values_ptr, &vec![
-                            ctx.ctx.int64_type().unwrap().const_int(*idx, false).unwrap()
-                                ][], "value_ptr").unwrap());
+                            ctx.ctx.int64_type().const_int(*idx, false)
+                                ][], "value_ptr"));
             }
 
             Value::KRec{ll: alloced_rec, rec: rec}
@@ -508,8 +505,8 @@ fn gen_expr<'a>(e: &Expr, ctx: &mut GenContext<'a>) -> Value<'a> {
                 ll: ctx.builder.build_call(
                     ctx.bi_get_property(),
                     &vec![ll,
-                        ctx.ctx.int64_type().unwrap().const_int(symbol_ll, false).unwrap()][],
-                    "get_property").unwrap()
+                        ctx.ctx.int64_type().const_int(symbol_ll, false)][],
+                    "get_property")
             }
         }
         Expr::Call(ref obj, ref symb, ref args) => {
@@ -520,31 +517,31 @@ fn gen_expr<'a>(e: &Expr, ctx: &mut GenContext<'a>) -> Value<'a> {
             let ll = objv.to_unk_ll(ctx);
             let symbol_ll = ctx.symbol_table.lookup(symb.clone());
             let get_method = ctx.bi_get_method();
-            get_method.dump_value();
-            ll.dump_value();
-            ctx.ctx.int64_type().unwrap().const_int(symbol_ll, false).unwrap().dump_value();
+            get_method.dump();
+            ll.dump();
+            ctx.ctx.int64_type().const_int(symbol_ll, false).dump();
 
             println!("Here");
             let method_ll = ctx.builder.build_call(
                 get_method,
                 &vec![ll,
-                      ctx.ctx.int64_type().unwrap().const_int(symbol_ll, false).unwrap()][],
-                "get_method").unwrap();
+                      ctx.ctx.int64_type().const_int(symbol_ll, false)][],
+                "get_method");
             println!("There");
 
             // Determine the function type we want
             let mut ptypes = Vec::with_capacity(args.len());
             for _ in args.iter() { ptypes.push(ctx.value_type()); }
-            let ftype = llvm::Type::function_type(
+            let ftype = llvm::function_type(
                 ctx.value_type(),
                 &ptypes[],
-                false).unwrap();
+                false);
 
 
             let method_ll = ctx.builder.build_bit_cast(
                 method_ll,
-                ftype.pointer_type(0).unwrap(),
-                "typed_method").unwrap();
+                ftype.pointer(),
+                "typed_method");
 
             let mut args_ll = Vec::with_capacity(args.len());
             for arg in args.iter() {
@@ -555,7 +552,7 @@ fn gen_expr<'a>(e: &Expr, ctx: &mut GenContext<'a>) -> Value<'a> {
                 ll: ctx.builder.build_call(
                     method_ll,
                     &args_ll[],
-                    "method_result").unwrap()
+                    "method_result")
             }
         }
         Expr::Block(ref body) => {
@@ -573,7 +570,7 @@ fn gen_expr<'a>(e: &Expr, ctx: &mut GenContext<'a>) -> Value<'a> {
 }
 
 
-fn gen_stmt<'a>(stmt: &Stmt, ctx: &mut GenContext<'a>) -> Value<'a> {
+unsafe fn gen_stmt(stmt: &Stmt, ctx: &mut GenContext) -> Value {
     match *stmt {
         Stmt::Let(ref id, ref expr) =>  {
             unimplemented!()
@@ -584,17 +581,17 @@ fn gen_stmt<'a>(stmt: &Stmt, ctx: &mut GenContext<'a>) -> Value<'a> {
 }
 
 // TODO(michael): make this actually useful
-pub fn gen_code(ast: Vec<Stmt>) {
-    let ctx = llvm::context_create();
-    let module = llvm::module_create_with_name("module", &*ctx);
-    let builder = ctx.create_builder();
+pub unsafe fn gen_code(ast: Vec<Stmt>) {
+    let ctx = llvm::OwnedContext::new();
+    let module = llvm::OwnedModule::new("module", *ctx);
+    let builder = llvm::OwnedBuilder::new(*ctx);
     let mut method_queue = RingBuf::new();
     let mut symbol_table = SymbolTable::new();
 
     let mut gc = GenContext{
-        ctx: &*ctx,
-        builder: &*builder,
-        module: &*module,
+        ctx: *ctx,
+        builder: *builder,
+        module: *module,
         method_queue: method_queue,
         symbol_table: symbol_table
     };
@@ -605,9 +602,9 @@ pub fn gen_code(ast: Vec<Stmt>) {
     // Create the main function!
     let main_function = module.add_function(
         "__ducky_main",
-        llvm::Type::function_type(ctx.void_type().unwrap(), &vec![][], false).unwrap()).unwrap();
+        llvm::function_type(ctx.void_type(), &vec![][], false));
 
-    let main_function_body = ctx.append_basic_block(main_function, "main_body").unwrap();
+    let main_function_body = ctx.append_basic_block(main_function, "main_body");
     builder.position_builder_at_end(main_function_body);
 
     // Create the body for that main function!
@@ -617,5 +614,5 @@ pub fn gen_code(ast: Vec<Stmt>) {
 
     builder.build_ret_void();
 
-    module.dump_module();
+    module.dump();
 }

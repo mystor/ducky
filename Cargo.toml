@@ -15,10 +15,7 @@ env_logger = "0.2.*"
 regex = "0.1.*"
 regex_macros = "0.1.*"
 lazy_static = "0.1.*"
-
-[dependencies.rusty_llvm]
-
-path = "../rusty_llvm"
+bindgen = "*"
 
 [[bin]]
 

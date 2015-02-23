@@ -1,23 +1,22 @@
 // TODO: Box syntax :'(
-#![feature(plugin, box_syntax, slicing_syntax)]
+#![feature(plugin, box_syntax, box_patterns, slicing_syntax)]
 
 // !!!!! TEMPORARY WARNING SILENCERS !!!!!
 // TODO(michael): Show => Debug :(
 #![feature(hash, core, std_misc, collections)]
 
+// Compiler Plugins!
+#![plugin(regex_macros)]
+#![plugin(bindgen)]
+
 // We're going to use a lot of regular expressions
-#[plugin]
-extern crate regex_macros;
+// extern crate regex_macros;
 extern crate regex;
 
 #[macro_use]
 extern crate lazy_static;
 
-// LLVM bindings (from rustc)
-// extern crate rustc_llvm;
-
-extern crate rusty_llvm;
-// extern crate libc;
+extern crate libc;
 
 pub mod intern;
 pub mod scope;
@@ -35,10 +34,11 @@ fn main() {
     let code = r#"
 5+5
 "#;
+    println!("Test");
 
     let tokens = lexer::lex(code).unwrap();
     let ast = parser::parse_program(&mut parser::State::new(tokens.as_slice())).unwrap();
     let scoped_ast = scope::scoped_block(&mut scope::Scope::new(), ast.as_slice()).unwrap();
     infer::infer_program(scoped_ast.clone()).unwrap();
-    gen::gen_code(scoped_ast);
+    unsafe { gen::gen_code(scoped_ast); }
 }
