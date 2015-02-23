@@ -11,9 +11,9 @@ llvm-config --libs --cflags --ldflags core analysis executionengine mcjit interp
 
 fn main() {
     // Build the ducky runtime
-    Command::new("clang")
+    assert!(Command::new("clang")
         .args(&["rt/rt.c", "-c", "-emit-llvm", "-O3", "-o", "rt/rt.bc"])
-        .status().unwrap();
+        .status().unwrap().success());
 
     // Get the configuration for binding to llvm
     let config = Command::new("llvm-config")
@@ -29,7 +29,7 @@ fn main() {
     let config: Vec<_> = config_str.split(|c: char| c.is_whitespace()).collect();
 
     // Build & call bindgen to create the bindings
-    Command::new("cargo")
+    assert!(Command::new("cargo")
         .args(&["run", "--"])
         .current_dir("vendor/rust-bindgen")
         // Configuration Options
@@ -40,7 +40,7 @@ fn main() {
         .arg("-o").arg(&current_dir().unwrap().join("src/gen/llvm/ffi.rs"))
         // Input File
         .arg(&current_dir().unwrap().join("src/gen/llvm/ffi-header.h"))
-        .status().unwrap();
+        .status().unwrap().success());
 
     // Link to stdc++ (and curses for some reason)
     println!("cargo:rustc-flags=-l stdc++ -l curses");

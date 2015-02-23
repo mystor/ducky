@@ -2,8 +2,6 @@ use std::iter::repeat;
 use std::collections::{HashMap, VecDeque};
 use il::*;
 
-use self::llvm::ffi as ll;
-
 #[cfg(test)]
 mod test;
 
@@ -25,7 +23,7 @@ impl SymbolTable {
     unsafe fn lookup(&mut self, s: Symbol) -> u64 {
         match self.symbols.entry(s).get() {
             Ok(v) => *v,
-            Err(mut e) => {
+            Err(e) => {
                 self.counter += 1;
                 e.insert(self.counter);
                 self.counter
@@ -177,7 +175,7 @@ impl RecDef {
             let i32t = ctx.ctx.int32_type();
             let i64t = ctx.ctx.int64_type();
 
-            let mut vals = vec![
+            let vals = vec![
                 i32t.const_int(self.props.len() as u64, false),
                 i32t.const_int(self.mthds.len() as u64, false)];
 
@@ -230,7 +228,7 @@ impl RecDef {
 
             let vals: Vec<_> = vals.iter().cloned().chain(props).chain(mthds).collect();
 
-            let cs = ctx.ctx.const_struct(&vals[], true);
+            let cs = ctx.ctx.const_struct(&vals, true);
             let globl = ctx.module.add_global(cs.type_of(), "recorddef");
             self.cache = Some(globl);
 
@@ -289,7 +287,7 @@ impl Method {
             self.implementation = Some(ctx.module.add_function(
                 "generic_function_name",
                 llvm::function_type(ctx.value_type(),
-                                          &param_tys[],
+                                          &param_tys,
                                           false)));
         }
 
@@ -330,7 +328,7 @@ macro_rules! builtin_func {
             match self.module.get_named_function($cname) {
                 Some(x) => x,
                 None => {
-                    let func_type = llvm::function_type($return_ty, &vec![$($pty),+][], false);
+                    let func_type = llvm::function_type($return_ty, &[$($pty),+], false);
                     let function = self.module.add_function($cname, func_type);
                     // assert_eq!(self.module.get_named_function($cname), function);
 
@@ -347,7 +345,7 @@ macro_rules! builtin_mthd {
             match self.module.get_named_function($cname) {
                 Some(x) => x,
                 None => {
-                    let func_type = llvm::function_type(self.value_type(), &vec![$($pty),+][], false)
+                    let func_type = llvm::function_type(self.value_type(), &[$($pty),+], false)
                     let function = module.add_function($cname, func_type);
                     // assert_eq!(module.get_named_function($cname), function);
 
@@ -366,21 +364,21 @@ impl  GenContext {
     unsafe fn value_type(&self) -> llvm::Type {
         self.ctx.struct_type(
             // TODO(michael): Non-64-bit computers
-            &vec![self.ctx.int8_type(),
-                  self.ctx.int64_type()][],
+            &[self.ctx.int8_type(),
+                  self.ctx.int64_type()],
             false)
     }
 
     unsafe fn record_def_type(&self) -> llvm::Type {
         self.ctx.struct_type(
-            &vec![self.ctx.int32_type(),
-                  self.ctx.int32_type()][],
+            &[self.ctx.int32_type(),
+                  self.ctx.int32_type()],
             false)
     }
 
     unsafe fn record_type(&self) -> llvm::Type {
         self.ctx.struct_type(
-            &vec![self.record_def_type().pointer()][],
+            &[self.record_def_type().pointer()],
             false)
     }
 
@@ -400,7 +398,7 @@ impl  GenContext {
                   this.ctx.int8_type().pointer(),
                   this.value_type(), this.symbol_type());
 
-    unsafe fn bit_cast(&self, mut value: llvm::Value, ty: llvm::Type) -> llvm::Value {
+    unsafe fn bit_cast(&self, value: llvm::Value, ty: llvm::Type) -> llvm::Value {
         value.dump();
         ty.dump();
 
@@ -463,7 +461,7 @@ unsafe fn gen_expr(e: &Expr, ctx: &mut GenContext) -> Value {
             // Allocate the record
             let alloced_rec = ctx.builder.build_call(
                 ctx.bi_alloc_record(),
-                &vec![ctx.ctx.int64_type().const_int(rec_def.size(), false)][],
+                &[ctx.ctx.int64_type().const_int(rec_def.size(), false)],
                 "record");
 
             let zero = ctx.ctx.int64_type().const_int(0, false);
@@ -472,13 +470,13 @@ unsafe fn gen_expr(e: &Expr, ctx: &mut GenContext) -> Value {
                 rec_def.gen(ctx), // Pointer to the record definition
                 ctx.builder.build_in_bounds_gep(
                     alloced_rec,
-                    &vec![zero, zero][],
+                    &[zero, zero],
                     "record_def_ptr"));
 
             let values_ptr = ctx.builder.build_bit_cast(
                 ctx.builder.build_in_bounds_gep(
                     alloced_rec,
-                    &vec![ctx.ctx.int64_type().const_int(1, false)][],
+                    &[ctx.ctx.int64_type().const_int(1, false)],
                     "values_ptr_uncast"),
                 ctx.value_type().pointer(),
                 "values_ptr");
@@ -487,9 +485,9 @@ unsafe fn gen_expr(e: &Expr, ctx: &mut GenContext) -> Value {
                 ctx.builder.build_store(
                     rec.props[symb.clone()].to_unk_ll(ctx),
                     ctx.builder.build_in_bounds_gep(
-                        values_ptr, &vec![
+                        values_ptr, &[
                             ctx.ctx.int64_type().const_int(*idx, false)
-                                ][], "value_ptr"));
+                                ], "value_ptr"));
             }
 
             Value::KRec{ll: alloced_rec, rec: rec}
@@ -504,8 +502,8 @@ unsafe fn gen_expr(e: &Expr, ctx: &mut GenContext) -> Value {
             Value::Unk{
                 ll: ctx.builder.build_call(
                     ctx.bi_get_property(),
-                    &vec![ll,
-                        ctx.ctx.int64_type().const_int(symbol_ll, false)][],
+                    &[ll,
+                        ctx.ctx.int64_type().const_int(symbol_ll, false)],
                     "get_property")
             }
         }
@@ -524,8 +522,8 @@ unsafe fn gen_expr(e: &Expr, ctx: &mut GenContext) -> Value {
             println!("Here");
             let method_ll = ctx.builder.build_call(
                 get_method,
-                &vec![ll,
-                      ctx.ctx.int64_type().const_int(symbol_ll, false)][],
+                &[ll,
+                      ctx.ctx.int64_type().const_int(symbol_ll, false)],
                 "get_method");
             println!("There");
 
@@ -534,7 +532,7 @@ unsafe fn gen_expr(e: &Expr, ctx: &mut GenContext) -> Value {
             for _ in args.iter() { ptypes.push(ctx.value_type()); }
             let ftype = llvm::function_type(
                 ctx.value_type(),
-                &ptypes[],
+                &ptypes,
                 false);
 
 
@@ -551,7 +549,7 @@ unsafe fn gen_expr(e: &Expr, ctx: &mut GenContext) -> Value {
             Value::Unk{
                 ll: ctx.builder.build_call(
                     method_ll,
-                    &args_ll[],
+                    &args_ll,
                     "method_result")
             }
         }
@@ -602,7 +600,7 @@ pub unsafe fn gen_code(ast: Vec<Stmt>) {
     // Create the main function!
     let main_function = module.add_function(
         "__ducky_main",
-        llvm::function_type(ctx.void_type(), &vec![][], false));
+        llvm::function_type(ctx.void_type(), &[], false));
 
     let main_function_body = ctx.append_basic_block(main_function, "main_body");
     builder.position_builder_at_end(main_function_body);
