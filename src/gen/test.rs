@@ -1,3 +1,8 @@
+
+// TODO(michael): Implement real tests for code generation (not this)
+// (possibly including mcjit? Who knows!)
+
+/*
 use gen;
 use infer;
 use lexer;
@@ -160,3 +165,4 @@ fn union_as_fn_arg() {
         };
     });
 }
+*/

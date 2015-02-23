@@ -42,6 +42,6 @@ fn main() {
         .arg(&current_dir().unwrap().join("src/gen/llvm/ffi-header.h"))
         .status().unwrap();
 
-    // Link to libc++
+    // Link to stdc++ (and curses for some reason)
     println!("cargo:rustc-flags=-l stdc++ -l curses");
 }
