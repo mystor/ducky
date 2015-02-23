@@ -1,13 +1,15 @@
 // TODO: Box syntax :'(
-#![feature(plugin, box_syntax, box_patterns, slicing_syntax)]
+#![feature(plugin, box_syntax, box_patterns)]
 
 // !!!!! TEMPORARY WARNING SILENCERS !!!!!
 // TODO(michael): Show => Debug :(
-#![feature(hash, core, std_misc, collections)]
+#![feature(core, std_misc, collections, libc)]
+
+// This one is just here to make the bindgen-generated code not spew out warnings
+#![feature(int_uint)]
 
 // Compiler Plugins!
 #![plugin(regex_macros)]
-#![plugin(bindgen)]
 
 // We're going to use a lot of regular expressions
 // extern crate regex_macros;

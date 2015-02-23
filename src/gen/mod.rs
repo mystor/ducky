@@ -1,5 +1,5 @@
 use std::iter::repeat;
-use std::collections::{HashMap, RingBuf};
+use std::collections::{HashMap, VecDeque};
 use il::*;
 
 use self::llvm::ffi as ll;
@@ -318,7 +318,7 @@ struct GenContext {
     ctx: llvm::Context,
     builder: llvm::Builder,
     module: llvm::Module,
-    method_queue: RingBuf<Method>,
+    method_queue: VecDeque<Method>,
     symbol_table: SymbolTable,
 }
 
@@ -585,7 +585,7 @@ pub unsafe fn gen_code(ast: Vec<Stmt>) {
     let ctx = llvm::OwnedContext::new();
     let module = llvm::OwnedModule::new("module", *ctx);
     let builder = llvm::OwnedBuilder::new(*ctx);
-    let mut method_queue = RingBuf::new();
+    let mut method_queue = VecDeque::new();
     let mut symbol_table = SymbolTable::new();
 
     let mut gc = GenContext{

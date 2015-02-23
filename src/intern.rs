@@ -47,8 +47,8 @@ impl PartialEq for Atom {
 }
 impl Eq for Atom {}
 
-impl <S> hash::Hash<S> for Atom where S: hash::Hasher, S: hash::Writer {
-    fn hash(&self, state: &mut S) {
+impl hash::Hash for Atom {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         (&*self.string as *const _).hash(state)
     }
 }

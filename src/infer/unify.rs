@@ -286,14 +286,14 @@ fn _unify<'a, 'b>(stage: &'a mut Stage<'b>, a: Ty, b: Ty) -> Result<(), String> 
             // woop!
 
             #[derive(Debug)]
-            struct UniOpt<'a> {
+            struct UniOpt {
                 aopt: Ty,
                 bopt: Ty,
                 tyvar: Ty,
             }
 
-            impl <'a> UniOpt<'a> {
-                fn flip(&self) -> UniOpt<'a> {
+            impl UniOpt {
+                fn flip(&self) -> UniOpt {
                     UniOpt{
                         aopt: self.bopt.clone(),
                         bopt: self.aopt.clone(),
@@ -323,7 +323,7 @@ fn _unify<'a, 'b>(stage: &'a mut Stage<'b>, a: Ty, b: Ty) -> Result<(), String> 
                 }
             }
 
-            fn something<'a>(stage: &mut Stage<'a>, aopt: &Ty, uniopts: &Vec<UniOpt<'a>>) -> Result<(), String> {
+            fn something<'a>(stage: &mut Stage<'a>, aopt: &Ty, uniopts: &Vec<UniOpt>) -> Result<(), String> {
                 let filtered = uniopts.iter().filter(|x| x.aopt == *aopt);
 
                 // unify the objects together, woo!

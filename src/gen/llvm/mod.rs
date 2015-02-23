@@ -1,20 +1,21 @@
+#![allow(dead_code)]
+
 // This module is mostly utility functions to make working with
 // llvm-c slightly nicer. The meat is in the ffi module
 // I will add utility functions as I find them handy in here.
 
-use std::mem;
-use std::str::from_c_str;
 use std::ops::{Deref, DerefMut};
-use libc;
 use self::ffi::*;
 
+
+#[allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
 pub mod ffi;
 
 // Eww, I'm an awful person
 // I just really don't want to constantly type this out :-/
 macro_rules! cstr {
     ($s: expr) => {
-        ::std::ffi::CString::from_slice($s.as_bytes()).as_ptr()
+        ::std::ffi::CString::new($s.as_bytes()).unwrap().as_ptr()
     }
 }
 
